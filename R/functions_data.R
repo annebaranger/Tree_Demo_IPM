@@ -416,3 +416,44 @@ get_pc12_per_species <- function(traits, traits_rec){
 
 
 
+
+
+#' Disturbance function
+#'
+#' @param x population state distribution at time t
+#' @param species The species class object of interest to get mesh and RDIcoef
+#' values from. RDIcoef is a one line dataframe with RDI coefficient for one
+#' species.
+#' @param disturb Disturbance parameters. Highly depend on the disturbance
+#' impact parameters given to the species.
+#' @param ... Not used in this case.
+#' \describe{
+#' \item{qmd}{Forest Quadratic Mean Diameter}
+#' }
+#' @author Maxime Jeaunatre
+#'
+disturb_fun <- function(x, species, disturb = NULL, ...){
+  
+  dots <- list(...)
+  qmd <- dots$qmd 
+  size <- species$IPM$mesh
+  coef <- species$disturb_coef
+  if(any(disturb$type %in% coef$disturbance)){
+    coef <- subset(coef, disturbance == disturb$type)
+  } else {
+    stop(sprintf("The species %s miss this disturbance type (%s) parameters",
+                 sp_name(species), disturb$type))
+  }
+  
+  # edits for delay
+  size[size == 0] <- min(size[size !=0])
+  
+  logratio <-  log(size / qmd)
+  dbh.scaled = coef$dbh.intercept + size * coef$dbh.slope
+  logratio.scaled = coef$logratio.intercept + logratio * coef$logratio.slope
+  Pkill <- plogis(coef$a0 + coef$a1 * logratio.scaled + 
+                    coef$b * disturb$intensity ^(coef$c * dbh.scaled))
+  
+  return(x* Pkill) # always return the mortality distribution
+}
+

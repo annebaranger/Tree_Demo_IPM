@@ -19,7 +19,8 @@
 # Load targets
 library(targets)
 # Load functions
-lapply(grep("R$", list.files("R"), value = TRUE), function(x) source(file.path("R", x)))
+# lapply(grep("R$", list.files("R"), value = TRUE), function(x) source(file.path("R", x)))
+source("R/functions_data.R")
 # install if needed and load packages
 packages.in <- c("dplyr", "ggplot2", "matreex", "tidyr", "data.table", 
                  "factoextra", "modi", "sf", "rnaturalearth", "scales", 
@@ -68,13 +69,67 @@ list(
   # Get demographic parameters for all species
   tar_target(fit.list.allspecies, load_param_demo(all.species.name)),
   
-  # Generate some harvest rules
+  # Get all species for which IPM are available, and Fundiv data
+  tar_target(species.list.ipm,names(fit.list.allspecies)),
+  
+  # Mention species to exclude
+  tar_target(species.excl.ipm,c("Carpinus_betulus", "Quercus_ilex", "Salix_caprea")),
+  
+  # Get all species for which disturbance pars are available
+  tar_target(species.list.disturbance,species.list.ipm[species.list.ipm %in%
+                                                         disturb_coef.in[disturb_coef.in$disturbance=="storm","species"][[1]]]),
+  
+  # Generate some harvest rules = default? ask Maskimus
   tar_target(harv_rules.ref, c(Pmax = 0.25, dBAmin = 3, freq = 5, alpha = 1)),
   
   # Data.frame containing storm disturbance to apply
   tar_target(disturbance.df_storm, data.frame(
     type = rep("storm", 3), intensity = rep(0.5, 3), 
     IsSurv = rep(FALSE, 3), t = c(500:502))),
+
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Prepare data for simulations - Monospecific ---
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #' for each species define climatic combination of sggd/wai
+  
+  tar_target(climate.species.condition,
+             {FUNDIV_data |> 
+                 filter()})
+
+
+  #' 2. create a vector along which iterate (i.e. number of species)
+
+  #' 3. for each species, create all climate possible
+  
+  #' 4. create a species list
+  
+  #' 5. vector of ID per climate /species ?
+  
+  #' 6. create directory of species object
+
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make simulations - Monospecific ---
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #' 1. vector of sim
+  
+  #' 2. simulation of equilibrium
+  
+  #' 3. simulation with perturbation
+  
+  #' 4. simulation starting from 1m2 (but equil distrib)
+  
+  #' 5. IBM
+  
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make analysis - Monospecific ---
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #' 1. Extract resilience metric
+  
+  #' 2. extract parameters of each climatic conditions (earlier?)
+  
+  #' 3. fit gam for each metrics
+  
+  #' 4. randomisation of contribution and demographic compensation?
   
   
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
