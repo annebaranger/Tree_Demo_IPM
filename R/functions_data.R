@@ -122,6 +122,7 @@ read_FUNDIV = function(FUNDIV_tree_file, FUNDIV_plot_file,
 
 #' Function to create a dataset with only climate and presence of species
 #' @param FUNDIV_data Pre-formatted FUNDIV data
+#' @author Julien Barrere
 get_FUNDIV_species_per_climate = function(FUNDIV_data){
   
   FUNDIV_data %>%
@@ -144,6 +145,8 @@ get_FUNDIV_species_per_climate = function(FUNDIV_data){
 
 #' Function to load demographic parameters for several species
 #' @param species.names character vector of species ("Genus_species" format)
+#' @author Julien Barrere
+
 load_param_demo <- function(species.names){
   
   # Initialize list of fits (one element per species)
@@ -163,6 +166,8 @@ load_param_demo <- function(species.names){
 #' Function that creates climate list based on quantiles
 #' @param n.clim integer: number of climate to create in the list
 #' @param quantile.range numeric vector of length two indicating the climatic range 
+#' @author Julien Barrere
+
 create_climate_list = function(n.clim, quantile.range = c(0, 1)){
   
   # Vector that contains a sequence of quantiles value from 0 to 1
@@ -186,236 +191,152 @@ create_climate_list = function(n.clim, quantile.range = c(0, 1)){
 
 
 
-#' Function to generate a list with climate with species combinations
-#' @param FUNDIV_climate_species data with climate and sp presence per plot
-#' @param quantiles.in range between 0 and 1 of pca1 value to select
-#' @param disturbance.in name of the disturbance we plan to apply to filter 
-#'                       species combinations compatible
-#' @param nsp_per_richness number of sp combinations to select per sp richness
-#' @param exclude.in vector of species to exclude if bad estimation or IPM fit
-#' @param method way to select species combination: most frequent ("frequency") or "random" 
-#' @param disturb_coef.in disturbance coefficients
-make_climate <- function(FUNDIV_climate_species, quantiles.in, disturbance.in, 
-                         nsp_per_richness = 10, exclude.in = c("Carpinus_betulus"), 
-                         method = "frequency", disturb_coef.in, pc1_per_species){
+#' Function to generate a list with climate per species
+#' @param FUNDIV_data whole dataset
+#' @param species.list.ipm list of species
+#' @param n_cat number of categories
+make_climate_cat <- function(FUNDIV_data,
+                             species.list.ipm,
+                             n_cat=3,
+                             disturbance.in="storm"){
+  FUNDIV_plotcat=FUNDIV_data |>
+    # filter species with ipm
+    filter(species%in%gsub("_"," ",species.list.ipm)) |>
+    dplyr::select(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
+                  species,BAtot) |> 
+    group_by(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
+             species) |> 
+    # maximum Ba per plot
+    summarize(BA=max(BAtot)) |> 
+    distinct() |> 
+    # create sgdd/wai category, id and limits
+    group_by(species) |> 
+    mutate(wai_cat=cut(wai, breaks = n_cat),
+           sgdd_cat=cut(sgdd,breaks=n_cat),
+           wai_id=cut(wai, breaks = n_cat,labels = 1:n_cat),
+           sgdd_id=cut(sgdd, breaks = n_cat,labels = 1:n_cat),
+           BA=max(BA,na.rm = TRUE)) |> 
+    tidyr::separate_wider_delim(cols="wai_cat",names=c("wai_low","wai_up"),delim=",") |> 
+    tidyr::separate_wider_delim(cols="sgdd_cat",names=c("sgdd_low","sgdd_up"),delim=",") |> 
+    mutate(across(matches(c("low")),
+                  ~as.numeric(stringr::str_sub(.,2,-1))),
+           across(matches(c("up")),
+                  ~as.numeric(stringr::str_sub(.,1,-2)))) |> 
+    ungroup()
   
-  # Initialize output list
-  out = list()
+  # summarise for each category and species combinations
+  condi.init<-FUNDIV_plotcat |> 
+    group_by(species,BA,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |> 
+    summarize(n_plot=n(),
+              wai=mean(wai,na.rm=TRUE),
+              sgdd=mean(sgdd,na.rm=TRUE)) |>
+    # filter out category with too few plots
+    filter(n_plot>10) |> 
+    # create IPM vars
+    mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
+           waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0) |> 
+    ungroup() |> 
+    group_by(species) |> 
+    mutate(ID.spclim = row_number(),
+           ID.species=cur_group_id()) |> 
+    ungroup() |> 
+    mutate(ID.model=row_number(),
+           clim_lab=paste0("wai", wai_id, "sgdd", sgdd_id),
+           file = paste0("rds/", disturbance.in, "/", 
+                    species,"climate_",ID.spclim,"/species/",species,  ".rds")) 
   
-  # Get the range of pca_values based on quantiles.in
-  climate.in = as.numeric(quantile(FUNDIV_climate_species$pca1, 
-                                   probs = quantiles.in))
+  return(list(FUNDIV_plotcat=FUNDIV_plotcat,
+              species.cat=condi.init))
+}
+
+
+#' Function to major species combinations per species and climate category
+#' @param FUNDIV_data whole dataset
+#' @param FUNDIV_plotcat dataset with plots per species, and corresponding climate category
+#' @param species focal species 
+#' @param species.list.ipm list of species
+#' @param nsp_per_richness maximum of species richness per combination
+#' @param prop_threshold threshold of cumulative proportion
+make_species_combinations <- function(FUNDIV_data,
+                                      FUNDIV_plotcat,
+                                      condi.init,
+                                      sp_id,
+                                      species.list.ipm, 
+                                      nsp_per_richness=10,
+                                      prop_threshold=0.8){
+  s_p=species.list.ipm[sp_id]
+  sp=gsub("_"," ",s_p)
+  print(sp)
+  species.combinations <- FUNDIV_data |>
+    left_join(FUNDIV_plotcat |>
+                filter(species==sp) |>
+                dplyr::select(plotcode,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up),
+              by="plotcode") |>
+    dplyr::select(treecode,plotcode,species,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |>
+    filter(!is.na(wai_id)) %>%
+    filter(species%in%gsub("_"," ",species.list.ipm)) |> 
+    # Group by the climatic condition and plot
+    group_by(wai_id, sgdd_id, plotcode) %>%
+    # Summarize the species combination in each group, and species richness
+    summarise(species_combination = paste(sort(unique(gsub(" ","_",species))), collapse = "."),
+              n_species = n_distinct(species), .groups = 'drop') %>%
+    # Now count each unique combination's frequency within each wai_cat and sgdd_cat group
+    count(wai_id, sgdd_id, species_combination,n_species) |>
+    filter(n_species<nsp_per_richness) |>
+    group_by(wai_id, sgdd_id,) |>
+    mutate(prop=n/sum(n)) |>
+    # Optionally, arrange the results for better readability
+    arrange(wai_id, sgdd_id, desc(n)) |>
+    filter(species_combination!=s_p) |>
+    mutate(prop_cum=cumsum(prop)) |>
+    # select only frequent combinations (on 3 criteria)
+    filter(prop_cum<prop_threshold,
+           n>10,
+           prop>0.02)
+
+  species.clim.combi <- condi.init |>
+    filter(species==sp) |>
+    left_join(species.combinations,by=c("wai_id","sgdd_id")) |>
+    arrange(wai_id,sgdd_id)
+  # species.clim.combi="ok"
+  return(species.clim.combi)
+}
+
+#' Function to make a species object, save it as rds and return filename
+#' @param fit.list.allspecies demographic parameter for all species
+#' @param condi.init table with climate condition, species and ID
+#' @param ID.model n
+#' @author Julien Barrere & Anne Baranger
+make_species_rds <- function(fit.list.allspecies, condi.init, ID.model){
   
-  # climate vector
-  out$climate = setNames(
-    object = as.numeric(
-      FUNDIV_climate_species %>%
-        filter(pca1 > climate.in[1] & pca1 < climate.in[2]) %>%
-        summarize(sgdd = mean(sgdd), wai = mean(wai), PC1 = mean(pca1), PC2 = mean(pca2)) %>%
-        mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
-               waib = 1/(1 + wai), N = 2, SDM = 0) %>%
-        dplyr::select(sgdd, wai, sgddb, waib, wai2, sgdd2, PC1, PC2, N, SDM)
-    ), c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", "PC1", "PC2", "N", "SDM")
+  climate<-condi.init[ID.model,c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", 
+                                 "PC1", "PC2", "N", "SDM")]
+  species<-condi.init$species[ID.model]
+  s_p<-gsub(" ","_",species)
+
+  # Make IPM
+  IPM.in = make_IPM(
+    species = s_p, 
+    climate = climate, 
+    fit =  fit.list.allspecies[[s_p]],
+    clim_lab = condi.init$clim_lab[ID.model],
+    mesh = c(m = 700, L = 100, U = as.numeric(
+      fit.list.allspecies[[s_p]]$info[["max_dbh"]]) * 1.1),
+    BA = 0:100, verbose = TRUE, correction = "none"
   )
   
-  # Vector of all species
-  species_vec = colnames(FUNDIV_climate_species)[grep("_", colnames(FUNDIV_climate_species))]
-  # Remove species with bad estimation or unstable in simulations
-  species_vec = species_vec[!(species_vec %in% exclude.in)]
-  # Remove species for which we have no trait estimation
-  species_vec = species_vec[(species_vec %in% pc1_per_species$species)]
+  # Create species object 
+  species.in = species(
+    IPM.in, init_pop = def_initBA(20), harvest_fun = def_harv, disturb_fun = def_disturb)
   
-  # Adjust species combinations to the disturbance if one is specified
-  if(disturbance.in %in% c("storm", "fire", "biotic")){
-    # Vector of all species for which we have disturbance parameters
-    species_vec_dist = (disturb_coef.in %>%
-                          filter(disturbance %in% disturbance.in))$species
-    # Restrict the species vector to these species
-    species_vec = species_vec[which(species_vec %in% species_vec_dist)]
-  }
+  # Save species object in a rdata
+  create_dir_if_needed(condi.init$file[ID.model])
+  saveRDS(species.in, condi.init$file[ID.model])
   
+  # Return output list
+  return(condi.init$file[ID.model])
   
-  
-  # species combinations for this climate based on data (frequency method)
-  data.in <- FUNDIV_climate_species |> 
-    # -- Paste all species presence absence to create binary code
-    mutate(combi = purrr::pmap_chr(across(all_of(species_vec)), paste0, collapse = "")) |> 
-    # -- Calculate the number of species per species combination
-    mutate(n.sp = rowSums(across(all_of(species_vec)), na.rm = TRUE)) |> 
-    # -- Restrict to the climate specified
-    filter(pca1 > climate.in[1], pca1 < climate.in[2])
-  
-  # -- Select the main combinations
-  data_codes <- data.in %>%
-    group_by(combi, n.sp) %>%
-    summarize(n = n()) %>%
-    filter(n.sp > 0) %>%
-    arrange(desc(n.sp), desc(n))
-  codes = c() # initialize list of species combination
-  # for the climatic range considered, select the 10 most frequent species combinations
-  # at different species richness thresholds
-  for(j in 1:length(unique(data_codes$n.sp))){
-    codes.j = (data_codes %>%
-                 filter(n.sp == unique(data_codes$n.sp)[j]))$combi
-    if(length(codes.j) > nsp_per_richness) codes = c(codes, codes.j[c(1:nsp_per_richness)])
-    else codes = c(codes, codes.j)
-  }
-  # -- initialize combinations and species vector
-  combinations.in = c(); species.in = c()
-  # -- Loop on all codes
-  for(i in 1:length(codes)){
-    # Decode to get a vector of species
-    vec.i = decode_species(codes[i], species_vec)
-    # Add combination to the vector
-    combinations.in = c(combinations.in, paste(vec.i, collapse = "."))
-    # Store all species in species vector
-    species.in = c(species.in, vec.i)
-  }
-  # -- Identify all species for this climate
-  species.in = unique(species.in)
-  
-  
-  
-  # Make a random selection of species with same number of forest per richness
-  # -- Identify the number of combinations per species richness
-  combi.per.richness = data_codes %>%
-    filter(combi %in% codes) %>%
-    group_by(n.sp) %>%
-    summarize(n = n()) %>%
-    arrange(n.sp)
-  # -- Initialize the vector of random combinations
-  combinations.random.in = c()
-  # -- Loop on all levels of richness
-  for(r in 1:dim(combi.per.richness)[1]){
-    # All existing combinations for richness r
-    combinations.r.all = apply(as.data.frame(t(combn(species.in, r))), 1, 
-                               paste, collapse = "." )
-    # Randomly sample the same number of forest per richness as with the data approach
-    combinations.r = sample(combinations.r.all, size = combi.per.richness$n[r], 
-                            replace = FALSE)
-    # Add to the vector of random species combinations
-    combinations.random.in = c(combinations.random.in, combinations.r)
-  }
-  
-  
-  # Add to the final list the combinations and the list of all species
-  if(method == "frequency") out$combinations = combinations.in
-  if(method == "random") out$combinations = combinations.random.in
-  out$species = species.in
-  
-  # Return output
-  return(out)
 }
-
-
-#' Function to extract recruitment traits from demographic parameters
-#' @param fit.list.allspecies demographic parameters of all species
-#' @param FUNDIV_data pre-formatted tree data from FUNDIV
-#' @param comp.ref character indicating how to calculate competition: 
-#'                 "same" = mean competition across all species in dataset
-#'                 "specific" = mean competition per species
-get_recruitment_traits = function(fit.list.allspecies, FUNDIV_data, comp.ref){
-  
-  # Remove in-growth
-  FUNDIV_data = subset(FUNDIV_data, treestatus_th != 1)
-  
-  # Calculate the mean competition in the entire dataset
-  BASP.mean = mean(FUNDIV_data$BAtotSP, na.rm = TRUE)
-  BANONSP.mean = mean(FUNDIV_data$BAtotNONSP, na.rm = TRUE)
-  
-  # If we choose to attribute the same competition for all species: 
-  if(comp.ref == "same"){
-    # Provide mean value of competition across all species
-    data_species = data.frame(species = unique(climate_species$sp), 
-                              BATOTSP = BASP.mean, 
-                              BATOTNonSP = BANONSP.mean, 
-                              logBATOTSP = log(BASP.mean), 
-                              intercept = 1) %>%
-      # Add climatic data
-      left_join((climate_species %>%
-                   filter(N == 2) %>%
-                   dplyr::select(species = sp, wai, wai2, 
-                                 waib, sgdd, sgdd2, sgddb)), 
-                by = "species")
-  }
-  
-  # If we choose to attribute different competition per species
-  if(comp.ref == "specific"){
-    # Calculate mean competition per species
-    data_species = FUNDIV_data %>%
-      mutate(species = gsub("\\ ", "\\_", species)) %>%
-      filter(species %in% unique(climate_species$sp)) %>%
-      group_by(species) %>%
-      summarize(BATOTSP = mean(BAtotSP, na.rm = TRUE), 
-                BATOTNonSP = mean(BAtotNONSP, na.rm = TRUE)) %>%
-      mutate(logBATOTSP = log(BATOTSP), 
-             intercept = 1) %>%
-      # Add climatic data
-      left_join((climate_species %>%
-                   filter(N == 2) %>%
-                   dplyr::select(species = sp, wai, wai2, 
-                                 waib, sgdd, sgdd2, sgddb)), 
-                by = "species")
-  }
-  
-  # Initialize the output dataset
-  traits_rec = data.frame(species = names(fit.list.allspecies), 
-                          recruitment = NA_real_, 
-                          delay = NA_real_)
-  
-  # Loop on all species to gather traits
-  for(i in 1:dim(traits_rec)[1]){
-    
-    # Species i
-    sp.i = traits_rec$species[i]
-    
-    # Give the delay from fit list
-    traits_rec$delay[i] = as.numeric(fit.list.allspecies[[i]]$info["delay"])
-    
-    # Recruitment parameters for species i
-    vec.rec.i = fit.list.allspecies[[i]]$rec$params_m
-    
-    # Associated vector of variables
-    vec.var.i = as.vector(subset(data_species, species == sp.i)[, names(vec.rec.i)])
-    
-    # Get the recruitment
-    traits_rec$recruitment[i] = exp(sum(vec.rec.i*vec.var.i))
-    
-  }
-  
-  # Return the trait dataset generated
-  return(traits_rec)
-}
-
-
-
-
-#' Get coordinate in first pca traits axis per species
-#' @param traits dataframe containing trait value per species
-#' @param traits_rec recruitment traits per species
-get_pc12_per_species <- function(traits, traits_rec){
-  
-  # Compile the traits data
-  data_traits = left_join(traits, traits_rec, by = "species") %>%
-    dplyr::select(-delay) %>%
-    drop_na()
-  
-  # Make the PCA
-  pca <- prcomp((data_traits %>% dplyr::select(-species)), 
-                center = T, scale = T)
-  
-  # Extract data for individuals
-  out = data.frame(species = data_traits$species, 
-                   pca1 = get_pca_ind(pca)[[1]][, 1], 
-                   pca2 = get_pca_ind(pca)[[1]][, 2])
-  # return the output
-  return(out)
-}
-
-
-
-
-
 
 
 #' Disturbance function

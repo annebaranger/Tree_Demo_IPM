@@ -22,25 +22,53 @@ FUNDIV_data |>
   ggplot(aes(wai_cat,sgdd_cat,fill=log(n)))+
   geom_tile()
 
-condi.init=FUNDIV_data |>
+
+### Climatic condition and species association ###
+n_cat=3
+FUNDIV_plotcat=FUNDIV_data |>
+  filter(species%in%gsub("_"," ",species.list.ipm)) |>
+  filter(species=="Abies alba") |>
   dplyr::select(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
                 species,BAtot) |> 
   group_by(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
            species) |> 
   summarize(BA=max(BAtot)) |> 
-  ungroup() |> 
-  unique() |> 
-  filter(species==sp) |> 
-  mutate(wai_cat=cut(wai, breaks = 3,labels=1:3),
-         sgdd_cat=cut(sgdd,breaks=3,labels=1:3),
+  group_by(species) |> 
+  mutate(wai_cat=cut(wai, breaks = n_cat,labels=1:n_cat),
+         sgdd_cat=cut(sgdd,breaks=n_cat,labels=1:n_cat),
          BA=max(BA,na.rm = TRUE)) |> 
-  group_by(BA,wai_cat,sgdd_cat) |> 
+  ungroup()
+
+condi.init<-FUNDIV_plotcat |> 
+  group_by(species,BA,wai_cat,sgdd_cat) |> 
   summarize(wai=mean(wai),
             sgdd=mean(sgdd)) |> 
   mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
-         waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0)
+         waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0) 
 
 
+nsp_per_richness=10
+prop_threshold=0.8
+FUNDIV_data |> 
+  left_join(FUNDIV_plotcat |> select(plotcode,wai_cat,sgdd_cat)) |> 
+  select(treecode,plotcode,species,wai_cat,sgdd_cat) |> 
+  filter(!is.na(wai_cat)) %>%
+  filter(species%in%gsub("_"," ",species.list.ipm)) |>
+  # Group by the relevant categories
+  group_by(wai_cat, sgdd_cat, plotcode) %>%
+  # Summarize the species occurrences in each group
+  summarise(species_combination = paste(sort(unique(gsub(" ","_",species))), collapse = "."),
+            n_species = n_distinct(species), .groups = 'drop') %>%
+  # Now count each unique combination's frequency within each wai_cat and sgdd_cat group
+  count(wai_cat, sgdd_cat, species_combination,n_species) %>%
+  filter(n_species<nsp_per_richness) |> 
+  group_by(wai_cat,sgdd_cat) |> 
+  mutate(prop=n/sum(n)) |> 
+  # Optionally, arrange the results for better readability
+  arrange(wai_cat, sgdd_cat, desc(n)) |> 
+  mutate(prop_cum=cumsum(prop)) |> 
+  filter(prop_cum<prop_threshold) |> 
+  View()
 ### Repeated simulation for different climate ###
 #################################################
 sym_clim=data.frame(species=as.character(),
@@ -180,6 +208,7 @@ if(reached_equil){
   species.eq = list(sp_sp.eq)
   names(species.eq)=s_p
   sp_for.eq <- forest(species = species.eq)  
+  sp_for.eq <- forest(species = list(species.in))  
   
   # Run simulation till equilibrium
   sim.in.20 = sim_deter_forest(

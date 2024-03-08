@@ -69,12 +69,14 @@ list(
   # Get demographic parameters for all species
   tar_target(fit.list.allspecies, load_param_demo(all.species.name)),
   
-  # Get all species for which IPM are available, and Fundiv data
-  tar_target(species.list.ipm,names(fit.list.allspecies)),
-  
   # Mention species to exclude
   tar_target(species.excl.ipm,c("Carpinus_betulus", "Quercus_ilex", "Salix_caprea")),
   
+  # Get all species for which IPM are available, and Fundiv data
+  tar_target(species.list.ipm,names(fit.list.allspecies)[!names(fit.list.allspecies) %in%
+                                                           species.excl.ipm]),
+  
+  tar_target(sp_id,seq_along(species.list.ipm)),
   # Get all species for which disturbance pars are available
   tar_target(species.list.disturbance,species.list.ipm[species.list.ipm %in%
                                                          disturb_coef.in[disturb_coef.in$disturbance=="storm","species"][[1]]]),
@@ -91,10 +93,25 @@ list(
   # -- Prepare data for simulations - Monospecific ---
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   #' for each species define climatic combination of sggd/wai
+
+  tar_target(climate.cat,
+             make_climate_cat(FUNDIV_data,
+                              species.list.ipm, 
+                              n_cat=3,
+                              disturbance.in = "storm")
+             ),
   
-  tar_target(climate.species.condition,
-             {FUNDIV_data |> 
-                 filter()})
+  # For each cliamte condition, species combinations
+  tar_target(species.combination,
+             make_species_combinations(FUNDIV_data=FUNDIV_data,
+                                       FUNDIV_plotcat=climate.cat$FUNDIV_plotcat,
+                                       condi.init=climate.cat$species.cat,
+                                       sp_id=sp_id,
+                                       species.list.ipm=species.list.ipm, 
+                                       nsp_per_richness=10,
+                                       prop_threshold=0.8),
+             pattern=map(sp_id),iteration = "vector"),
+  
 
 
   #' 2. create a vector along which iterate (i.e. number of species)
@@ -106,6 +123,15 @@ list(
   #' 5. vector of ID per climate /species ?
   
   #' 6. create directory of species object
+  tar_target(ID.model,
+             1:4),
+  tar_target(species_clim,
+             make_species_rds(fit.list.allspecies=fit.list.allspecies,
+                              condi.init=climate.cat$species.cat,
+                              ID.model=ID.model),
+             pattern=map(ID.model),
+             iteration="vector",
+             format="file"),
 
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make simulations - Monospecific ---
@@ -143,12 +169,12 @@ list(
   tar_target(climate_list_storm, create_climate_list(length(ID.climate_storm), 
                                                      quantile.range = c(0.2, 1))),
   # -- generate one climate object per iteration with branching
-  tar_target(climate_storm, make_climate(
-    FUNDIV_climate_species, quantiles.in = climate_list_storm[[ID.climate_storm]], 
-    "storm", 10, exclude.in = c("Carpinus_betulus", "Quercus_ilex", "Salix_caprea"), 
-    method = "frequency", disturb_coef.in, traits), 
-    pattern = map(ID.climate_storm), iteration = "list"), 
-  
+  # tar_target(climate_storm, make_climate(
+  #   FUNDIV_climate_species, quantiles.in = climate_list_storm[[ID.climate_storm]], 
+  #   "storm", 10, exclude.in = c("Carpinus_betulus", "Quercus_ilex", "Salix_caprea"), 
+  #   method = "frequency", disturb_coef.in, traits), 
+  #   pattern = map(ID.climate_storm), iteration = "list"), 
+  # 
   
   
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
