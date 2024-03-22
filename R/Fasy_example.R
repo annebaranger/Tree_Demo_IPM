@@ -1,10 +1,13 @@
 library(matreex)
 library(dplyr)
+library(tidyr)
 library(ggplot2)
 library(targets)
 
 
 tar_load(FUNDIV_data)
+worldmap <- sf::st_as_sf(rworldmap::getMap(resolution = "high"))  
+
 disturb_coef.in=data.table::fread("data/disturb_coef.csv") |> 
   filter(disturbance=="storm")
 disturbance.df_storm= data.frame(
@@ -21,6 +24,80 @@ FUNDIV_data |>
   summarise(n=n()) |> 
   ggplot(aes(wai_cat,sgdd_cat,fill=log(n)))+
   geom_tile()
+
+
+FUNDIV_data |> 
+  filter(species==sp) |> 
+  mutate(wai_cat=cut(wai, breaks = 10,labels=1:10),
+         sgdd_cat=cut(sgdd,breaks=10,labels=1:10)) |> 
+  sample_n(50000) |> 
+  ggplot()+
+  geom_point(aes(x=longitude,y=latitude,color=wai))+
+  geom_sf(data=worldmap,fill=NA)+
+  xlim(c(-10,25))+ylim(c(35,65))
+
+tar_load(species.list.ipm)
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  pivot_longer(cols=c("wai","sgdd")) |> 
+  ggplot(aes(value,color=species))+
+  geom_density()+
+  theme(legend.position = "none")+
+  facet_wrap(~name,scales="free")
+
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  pivot_longer(cols=c("wai","sgdd")) |> 
+  group_by(species,name) |> 
+  summarise(range_clim=quantile(value,probs = 0.97)-quantile(value,probs = 0.03)) |> 
+  arrange(name,range_clim) |> 
+  group_by(name) |> 
+  mutate(extrema=case_when(range_clim==min(range_clim)~"min",
+                           range_clim==max(range_clim)~"max")) |> 
+  filter(extrema%in%c("min","max")) |> 
+  select(-species) |> 
+  pivot_wider(names_from = extrema,
+              values_from = range_clim) |> 
+  mutate(step_min=min/4,
+         step_max=max/10) |> 
+  mutate(step=max(step_min,step_max)) |> 
+  ungroup() |> 
+  select(name,step)->step_cat
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  pivot_longer(cols=c("wai","sgdd")) |> 
+  group_by(species,name) |> 
+  summarise(range_clim=quantile(value,probs = 0.97)-quantile(value,probs = 0.03)) |> 
+  left_join(step_cat) |> 
+  mutate(n_breaks=round(range_clim/step)) |> 
+  select(species,name, n_breaks) |> 
+  pivot_wider(names_from = name,
+              values_from = n_breaks) |> 
+  rename(sgdd_breaks=sgdd,wai_breaks=wai)->step_species
+
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  mutate(wai_cat=cut(wai, breaks = step_species[step_species$species==sp,"wai_breaks"][[1]]),
+         sgdd_cat=cut(sgdd,breaks=step_species[step_species$species==sp,"sgdd_breaks"][[1]])) |> 
+  select(species,wai_cat,sgdd_cat) |> 
+  unique() |> 
+  group_by(species) |> 
+  summarise(n=n()) |> View()
+
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  group_by(species) |> 
+  filter(species%in% c("Abies alba","Quercus ilex","Fagus sylvatica")) |> 
+  mutate(wai_cat=cut(wai, breaks = step_species[step_species$species==sp,"wai_breaks"][[1]]),
+         sgdd_cat=cut(sgdd,breaks=step_species[step_species$species==sp,"sgdd_breaks"][[1]]),
+         clim_cat=factor(paste0(wai_cat,sgdd_cat))) |> 
+  # sample_n(50000) |> 
+  ggplot()+
+  geom_point(aes(x=longitude,y=latitude,color=clim_cat))+
+  geom_sf(data=worldmap,fill=NA)+
+  theme(legend.position = "none")+
+  xlim(c(-10,25))+ylim(c(35,65))+
+  facet_wrap(~species)
 
 
 ### Climatic condition and species association ###
