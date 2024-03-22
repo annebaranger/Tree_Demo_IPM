@@ -49,7 +49,7 @@ FUNDIV_data |>
   filter(species %in% gsub("_"," ",species.list.ipm)) |> 
   pivot_longer(cols=c("wai","sgdd")) |> 
   group_by(species,name) |> 
-  summarise(range_clim=quantile(value,probs = 0.97)-quantile(value,probs = 0.03)) |> 
+  summarise(range_clim=quantile(value,probs = 0.95)-quantile(value,probs = 0.05)) |> 
   arrange(name,range_clim) |> 
   group_by(name) |> 
   mutate(extrema=case_when(range_clim==min(range_clim)~"min",
@@ -58,8 +58,8 @@ FUNDIV_data |>
   select(-species) |> 
   pivot_wider(names_from = extrema,
               values_from = range_clim) |> 
-  mutate(step_min=min/4,
-         step_max=max/10) |> 
+  mutate(step_min=min/6,
+         step_max=max/15) |> 
   mutate(step=max(step_min,step_max)) |> 
   ungroup() |> 
   select(name,step)->step_cat
@@ -67,7 +67,7 @@ FUNDIV_data |>
   filter(species %in% gsub("_"," ",species.list.ipm)) |> 
   pivot_longer(cols=c("wai","sgdd")) |> 
   group_by(species,name) |> 
-  summarise(range_clim=quantile(value,probs = 0.97)-quantile(value,probs = 0.03)) |> 
+  summarise(range_clim=quantile(value,probs = 0.95)-quantile(value,probs = 0.05)) |> 
   left_join(step_cat) |> 
   mutate(n_breaks=round(range_clim/step)) |> 
   select(species,name, n_breaks) |> 
@@ -77,17 +77,30 @@ FUNDIV_data |>
 
 FUNDIV_data |> 
   filter(species %in% gsub("_"," ",species.list.ipm)) |> 
-  mutate(wai_cat=cut(wai, breaks = step_species[step_species$species==sp,"wai_breaks"][[1]]),
-         sgdd_cat=cut(sgdd,breaks=step_species[step_species$species==sp,"sgdd_breaks"][[1]])) |> 
-  select(species,wai_cat,sgdd_cat) |> 
-  unique() |> 
+  left_join(step_species) |> 
   group_by(species) |> 
-  summarise(n=n()) |> View()
+  mutate(wai_cat=cut(wai, 
+                     breaks = seq(from=min(wai,na.rm=TRUE),
+                                  to=max(wai,na.rm=TRUE),
+                                  length.out=(wai_breaks+1)),
+                     include.lowest = TRUE),
+         sgdd_cat=cut(sgdd,
+                      breaks=seq(min(sgdd,na.rm=TRUE)
+                                 ,max(sgdd,na.rm=TRUE),
+                                 length.out=(sgdd_breaks+1)),
+                      include.lowest = TRUE)) |> 
+  ungroup() |> 
+  select(species,wai_cat,sgdd_cat) |>
+  unique() |>
+  group_by(species) |>
+  summarise(n=n()) |>
+  View()
 
+sp="Juniperus thurifera"
 FUNDIV_data |> 
   filter(species %in% gsub("_"," ",species.list.ipm)) |> 
   group_by(species) |> 
-  filter(species%in% c("Abies alba","Quercus ilex","Fagus sylvatica")) |> 
+  filter(species%in% c("Fagus sylvatica")) |> 
   mutate(wai_cat=cut(wai, breaks = step_species[step_species$species==sp,"wai_breaks"][[1]]),
          sgdd_cat=cut(sgdd,breaks=step_species[step_species$species==sp,"sgdd_breaks"][[1]]),
          clim_cat=factor(paste0(wai_cat,sgdd_cat))) |> 
@@ -96,10 +109,30 @@ FUNDIV_data |>
   geom_point(aes(x=longitude,y=latitude,color=clim_cat))+
   geom_sf(data=worldmap,fill=NA)+
   theme(legend.position = "none")+
-  xlim(c(-10,25))+ylim(c(35,65))+
-  facet_wrap(~species)
+  xlim(c(-10,25))+ylim(c(35,65))
 
 
+
+FUNDIV_data |> 
+  filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+  left_join(step_species) |> 
+  filter(species%in% c("Abies alba","Juniperus thurifera","Fagus sylvatica")) |> 
+  group_by(species) |> 
+  mutate(wai_cat=cut(wai, 
+                     breaks = seq(from=min(wai,na.rm=TRUE),
+                                  to=max(wai,na.rm=TRUE),
+                                  length.out=(wai_breaks+1)),
+                     include.lowest = TRUE),
+         sgdd_cat=cut(sgdd,
+                      breaks=seq(min(sgdd,na.rm=TRUE)
+                                 ,max(sgdd,na.rm=TRUE),
+                                 length.out=(sgdd_breaks+1)),
+                      include.lowest = TRUE)) |> 
+  group_by(species,wai_cat,sgdd_cat) |> 
+  summarise(n=n()) |> 
+  ggplot(aes(wai_cat,sgdd_cat,fill=log(n)))+
+  geom_tile()+
+  facet_wrap(~species,scales="free")
 ### Climatic condition and species association ###
 n_cat=3
 FUNDIV_plotcat=FUNDIV_data |>
