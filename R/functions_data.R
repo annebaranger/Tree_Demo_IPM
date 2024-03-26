@@ -197,11 +197,11 @@ create_climate_list = function(n.clim, quantile.range = c(0, 1)){
 #' @param n_cat number of categories
 make_climate_cat <- function(FUNDIV_data,
                              species.list.ipm,
-                             n_cat=3,
-                             disturbance.in="storm"){
-  FUNDIV_plotcat=FUNDIV_data |>
-    # filter species with ipm
-    filter(species%in%gsub("_"," ",species.list.ipm)) |>
+                             max_cat=80,
+                             min_cat=10){
+  # summarize each plots 
+  FUNDIV_plot=FUNDIV_data |> 
+    filter(species %in% gsub("_"," ",species.list.ipm)) |> 
     dplyr::select(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
                   species,BAtot) |> 
     group_by(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
@@ -209,41 +209,104 @@ make_climate_cat <- function(FUNDIV_data,
     # maximum Ba per plot
     summarize(BA=max(BAtot)) |> 
     distinct() |> 
-    # create sgdd/wai category, id and limits
-    group_by(species) |> 
-    mutate(wai_cat=cut(wai, breaks = n_cat),
-           sgdd_cat=cut(sgdd,breaks=n_cat),
-           wai_id=cut(wai, breaks = n_cat,labels = 1:n_cat),
-           sgdd_id=cut(sgdd, breaks = n_cat,labels = 1:n_cat),
-           BA=max(BA,na.rm = TRUE)) |> 
-    tidyr::separate_wider_delim(cols="wai_cat",names=c("wai_low","wai_up"),delim=",") |> 
-    tidyr::separate_wider_delim(cols="sgdd_cat",names=c("sgdd_low","sgdd_up"),delim=",") |> 
-    mutate(across(matches(c("low")),
-                  ~as.numeric(stringr::str_sub(.,2,-1))),
-           across(matches(c("up")),
-                  ~as.numeric(stringr::str_sub(.,1,-2)))) |> 
     ungroup()
+  # 
+  # step_cat<- FUNDIV_plot |>
+  #   pivot_longer(cols=c("wai","sgdd")) |>
+  #   group_by(species,name) |>
+  #   summarise(range_clim=quantile(value,probs = 0.95)-quantile(value,probs = 0.05)) |>
+  #   arrange(name,range_clim) |>
+  #   group_by(name) |>
+  #   mutate(extrema=case_when(range_clim==min(range_clim)~"min",
+  #                            range_clim==max(range_clim)~"max")) |>
+  #   filter(extrema%in%c("min","max")) |>
+  #   select(-species) |>
+  #   pivot_wider(names_from = extrema,
+  #               values_from = range_clim) |>
+  #   mutate(step_min=min/6,
+  #          step_max=max/15) |>
+  #   mutate(step=max(step_min,step_max)) |>
+  #   ungroup() |>
+  #   select(name,step)
+  step_cat<- data.frame(name=c("sgdd","wai"),
+                        step=c(95,0.095))
   
-  # summarise for each category and species combinations
-  condi.init<-FUNDIV_plotcat |> 
-    group_by(species,BA,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |> 
-    summarize(n_plot=n(),
-              wai=mean(wai,na.rm=TRUE),
-              sgdd=mean(sgdd,na.rm=TRUE)) |>
-    # filter out category with too few plots
-    filter(n_plot>10) |> 
-    # create IPM vars
-    mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
-           waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0) |> 
-    ungroup() |> 
-    group_by(species) |> 
-    mutate(ID.spclim = row_number(),
-           ID.species=cur_group_id()) |> 
-    ungroup() |> 
-    mutate(ID.model=row_number(),
-           clim_lab=paste0("wai", wai_id, "sgdd", sgdd_id),
-           file = paste0("rds/", disturbance.in, "/", 
-                    species,"climate_",ID.spclim,"/species/",species,  ".rds")) 
+  max_obs<-max_cat+1
+  while(max_obs>max_cat){
+    print(max_obs)
+    step_cat$step[1]=step_cat$step[1]+5
+    step_cat$step[2]=step_cat$step[2]+0.005
+    
+    FUNDIV_plot |> 
+      pivot_longer(cols=c("wai","sgdd")) |> 
+      group_by(species,name) |> 
+      summarise(range_clim=quantile(value,probs = 0.95)-quantile(value,probs = 0.05)) |> 
+      left_join(step_cat) |> 
+      mutate(n_breaks=round(range_clim/step)) |> 
+      dplyr::select(species,name, n_breaks) |> 
+      pivot_wider(names_from = name,
+                  values_from = n_breaks) |> 
+      rename(sgdd_breaks=sgdd,wai_breaks=wai)->step_species
+    
+    
+    
+    FUNDIV_plotcat <- FUNDIV_plot |> 
+      left_join(step_species) |> 
+      group_by(species) |> 
+      mutate(wai_cat=cut(wai, 
+                         breaks = seq(from=min(wai,na.rm=TRUE),
+                                      to=max(wai,na.rm=TRUE),
+                                      length.out=(wai_breaks+1)),
+                         include.lowest = TRUE),
+             sgdd_cat=cut(sgdd,
+                          breaks=seq(min(sgdd,na.rm=TRUE)
+                                     ,max(sgdd,na.rm=TRUE),
+                                     length.out=(sgdd_breaks+1)),
+                          include.lowest = TRUE)) |> 
+      tidyr::separate_wider_delim(cols="wai_cat",names=c("wai_low","wai_up"),delim=",",cols_remove = FALSE) |> 
+      tidyr::separate_wider_delim(cols="sgdd_cat",names=c("sgdd_low","sgdd_up"),delim=",",cols_remove = FALSE) |> 
+      mutate(across(matches(c("low")),
+                    ~as.numeric(stringr::str_sub(.,2,-1))),
+             across(matches(c("up")),
+                    ~as.numeric(stringr::str_sub(.,1,-2)))
+      ) |> 
+      ungroup()  |> 
+      group_by(species) %>%
+      mutate(
+        wai_id = as.integer(factor(wai_cat)),
+        sgdd_id = as.integer(factor(sgdd_cat))
+      ) %>%
+      ungroup()
+    
+    condi.init<- FUNDIV_plotcat |> 
+      group_by(species,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |> 
+      summarize(n_plot=n(),
+                wai=mean(wai,na.rm=TRUE),
+                sgdd=mean(sgdd,na.rm=TRUE)) |>
+      # filter out category with too few plots
+      filter(n_plot>min_cat) |> 
+      # create IPM vars
+      mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
+             waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0) |> 
+      ungroup() |> 
+      group_by(species) |> 
+      mutate(ID.spclim = row_number(),
+             clim_lab=paste0("wai", wai_id, "sgdd", sgdd_id),
+             ID.species=cur_group_id()) |> 
+      ungroup()
+    condi.init |> 
+      group_by(species) |> 
+      summarise(n=n()) |> 
+      pull(n) |> 
+      max() -> max_obs
+
+  }
+  
+
+    # mutate(ID.model=row_number(),
+    #        clim_lab=paste0("wai", wai_id, "sgdd", sgdd_id),
+    #        file = paste0("rds/", disturbance.in, "/", 
+    #                 species,"climate_",ID.spclim,"/species/",species,  ".rds")) 
   
   return(list(FUNDIV_plotcat=FUNDIV_plotcat,
               species.cat=condi.init))
@@ -268,36 +331,51 @@ make_species_combinations <- function(FUNDIV_data,
   sp=gsub("_"," ",s_p)
   print(sp)
   species.combinations <- FUNDIV_data |>
+    filter(species%in%gsub("_"," ",species.list.ipm)) |> 
+    # join with climate cat of the targetted species
     left_join(FUNDIV_plotcat |>
                 filter(species==sp) |>
                 dplyr::select(plotcode,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up),
               by="plotcode") |>
     dplyr::select(treecode,plotcode,species,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |>
     filter(!is.na(wai_id)) %>%
-    filter(species%in%gsub("_"," ",species.list.ipm)) |> 
     # Group by the climatic condition and plot
     group_by(wai_id, sgdd_id, plotcode) %>%
     # Summarize the species combination in each group, and species richness
     summarise(species_combination = paste(sort(unique(gsub(" ","_",species))), collapse = "."),
-              n_species = n_distinct(species), .groups = 'drop') %>%
-    # Now count each unique combination's frequency within each wai_cat and sgdd_cat group
+              n_species = n_distinct(species), .groups = 'drop')  |> 
+    #  count each unique combination's frequency within each wai_cat and sgdd_cat group
     count(wai_id, sgdd_id, species_combination,n_species) |>
     filter(n_species<nsp_per_richness) |>
-    group_by(wai_id, sgdd_id,) |>
+    group_by(wai_id, sgdd_id) |>
     mutate(prop=n/sum(n)) |>
     # Optionally, arrange the results for better readability
-    arrange(wai_id, sgdd_id, desc(n)) |>
+    arrange(wai_id, sgdd_id, desc(n)) 
+  
+  
+  species.target<- FUNDIV_plotcat |>
+    filter(species==sp) |> 
+    dplyr::select(wai_id,sgdd_id) |> 
+    distinct() |> 
+    mutate(species_combination=s_p) |> 
+    left_join(species.combinations |>
+                filter(species_combination==s_p),
+              by=c("wai_id","sgdd_id","species_combination")) |> 
+    mutate(prop_cum=NA)
+  
+  species.combinations.other<-species.combinations |> 
     filter(species_combination!=s_p) |>
-    mutate(prop_cum=cumsum(prop)) |>
-    # select only frequent combinations (on 3 criteria)
+    mutate(prop_cum=cumsum(prop)) |> 
     filter(prop_cum<prop_threshold,
            n>10,
-           prop>0.02)
+           prop>0.02) 
 
   species.clim.combi <- condi.init |>
     filter(species==sp) |>
-    left_join(species.combinations,by=c("wai_id","sgdd_id")) |>
+    left_join(rbind(species.target,species.combinations.other),
+              by=c("wai_id","sgdd_id")) |>
     arrange(wai_id,sgdd_id)
+  
   # species.clim.combi="ok"
   return(species.clim.combi)
 }
@@ -335,6 +413,46 @@ make_species_rds <- function(fit.list.allspecies, condi.init, ID.model){
   
   # Return output list
   return(condi.init$file[ID.model])
+  
+}
+
+
+
+#' Function to make a species mu matrix, create species object, and save it 
+#' as rds and return filename
+#' @param fit.list.allspecies demographic parameter for all species
+#' @param ID.model n
+#' @author Anne Baranger
+make_species_mu <- function(fit.list.allspecies,
+                            species.list.ipm, 
+                            sp_id){
+  s_p=species.list.ipm[sp_id]
+  sp=gsub("_"," ",s_p)
+  print(sp)
+
+  # Make IPM
+  IPM.mu <- make_mu_gr(
+    species = s_p, fit = fit.list.allspecies[[s_p]],
+    mesh = c(m = 700, L = 90, U = get_maxdbh(fit.list.allspecies[[s_p]]) * 1.1),
+    verbose = TRUE, stepMu = 0.0001)
+  
+    # Create species object 
+  species.in = species(IPM=IPM.mu,
+                       init_pop = def_initBA(20),
+                       harvest_fun = def_harv, 
+                       disturb_fun = def_disturb)
+  mu.file=paste0("rds/",s_p,"/",s_p,"_mu.rds")
+  species.file=paste0("rds/",s_p,"/",s_p,"_species.rds")
+  
+  
+  # Save species object in a rdata
+  create_dir_if_needed(mu.file)
+  saveRDS(IPM.mu, mu.file)
+  create_dir_if_needed(species.file)
+  saveRDS(species.in, species.file)
+  
+  # Return output list
+  return(mu.file)
   
 }
 

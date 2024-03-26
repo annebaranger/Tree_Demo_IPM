@@ -96,9 +96,9 @@ list(
 
   tar_target(climate.cat,
              make_climate_cat(FUNDIV_data,
-                              species.list.ipm, 
-                              n_cat=3,
-                              disturbance.in = "storm")
+                              species.list.ipm,
+                              max_cat=80,
+                              min_cat=10)
              ),
   
   # For each cliamte condition, species combinations
@@ -126,10 +126,10 @@ list(
   tar_target(ID.model,
              1:4),
   tar_target(species_clim,
-             make_species_rds(fit.list.allspecies=fit.list.allspecies,
-                              condi.init=climate.cat$species.cat,
-                              ID.model=ID.model),
-             pattern=map(ID.model),
+             make_species_mu(fit.list.allspecies=fit.list.allspecies,
+                             species.list.ipm=species.list.ipm, 
+                             sp_id=sp_id),
+             pattern=map(sp_id),
              iteration="vector",
              format="file"),
 
