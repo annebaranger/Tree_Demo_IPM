@@ -380,24 +380,41 @@ make_species_combinations <- function(FUNDIV_data,
   return(species.clim.combi)
 }
 
+#' Function create a list of all species object to be created
+#' @param species.combination table of species combination for each climate cat
+make_species_list <- function(species.combination){
+  species_list<-species.combination |> 
+    dplyr::select(species,wai_id,sgdd_id,ID.spclim,clim_lab, # climate info
+           wai,sgdd,sgdd2,wai2,sgddb,waib,PC1,PC2,N,SDM, # data for IPM clim
+           species_combination) |> # eponyme
+    mutate(species_combination=strsplit(species_combination,"\\.")) |> 
+    unnest(cols = species_combination) |> 
+    unique() |> 
+    mutate(file.ipm=paste0("rds/",gsub(" ","_",species),"/clim_",ID.spclim,"/",species_combination,".rds"),
+           id.species.obj=row_number())
+  
+  return(species_list)
+}
+
+
 #' Function to make a species object, save it as rds and return filename
 #' @param fit.list.allspecies demographic parameter for all species
 #' @param condi.init table with climate condition, species and ID
 #' @param ID.model n
 #' @author Julien Barrere & Anne Baranger
-make_species_rds <- function(fit.list.allspecies, condi.init, ID.model){
+make_species_rds <- function(fit.list.allspecies, species_list, species.obj.id){
   
-  climate<-condi.init[ID.model,c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", 
+  climate<-species_list[species.obj.id,c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", 
                                  "PC1", "PC2", "N", "SDM")]
-  species<-condi.init$species[ID.model]
-  s_p<-gsub(" ","_",species)
+  sp<-species_list$species[species.obj.id]
+  s_p<-gsub(" ","_",sp)
 
   # Make IPM
   IPM.in = make_IPM(
     species = s_p, 
     climate = climate, 
     fit =  fit.list.allspecies[[s_p]],
-    clim_lab = condi.init$clim_lab[ID.model],
+    clim_lab = species_list$clim_lab[species.obj.id],
     mesh = c(m = 700, L = 100, U = as.numeric(
       fit.list.allspecies[[s_p]]$info[["max_dbh"]]) * 1.1),
     BA = 0:100, verbose = TRUE, correction = "none"
@@ -408,14 +425,64 @@ make_species_rds <- function(fit.list.allspecies, condi.init, ID.model){
     IPM.in, init_pop = def_initBA(20), harvest_fun = def_harv, disturb_fun = def_disturb)
   
   # Save species object in a rdata
-  create_dir_if_needed(condi.init$file[ID.model])
-  saveRDS(species.in, condi.init$file[ID.model])
+  create_dir_if_needed(species_list$file.ipm[species.obj.id])
+  saveRDS(species.in, species_list$file.ipm[species.obj.id])
   
   # Return output list
-  return(condi.init$file[ID.model])
+  return(species_list$file.ipm[species.obj.id])
   
 }
 
+
+#' Function to make a list of simulations till equilibrium
+#' @param species.combination table with all species combi for each climate cat
+#' @param species_list table with all species fit info 
+#' @param species_object list of files of fitted species
+#' @param id_forest id of the forest to simulate
+make_simulations_equilibrium = function(species.combination,
+                                        species_list, 
+                                        species_object,
+                                        id_forest){
+  species.combination=species.combination[id_forest,"species_combination"][[1]]
+  species.in=unlist(strsplit(species.combination,"\\."))
+  clim=species.combination[id_forest,"ID.spclim"][[1]]
+  
+  list.species <- vector("list", length(species.in))
+  names(list.species) = species.in
+  
+  for(i in 1:length(species.in)){
+    id.species.obj=species_list[species_list$ID.spclim==clim &
+                                  species_list$species==sp &
+                                  species_list$species_combination==species.in[i],"id.species.obj"][[1]]
+    # Identify the file in species containing species i
+    species.file.i = species_object[id.species.obj]
+    # Store the file in the list
+    list.species[[i]] = readRDS(species.file.i)
+    
+  }
+  
+  # Make forest
+  forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
+  
+  
+  sim.in = sim_deter_forest(forest.in, 
+                            tlim = 4000,
+                            equil_time = 50000, 
+                            equil_dist = 2000, 
+                            equil_diff = 0.5, 
+                            harvest = "default", 
+                            SurfEch = 0.03,
+                            verbose = TRUE)
+  
+  forest.file=paste0("rds/", s_p, "/clim_", clim,
+                     "/sim_equilibrium/", species.combination, ".rds")
+    # Save simulation in a rdata
+  create_dir_if_needed(forest.file)
+  saveRDS(sim.in, forest.file)
+  
+  return(forest.file)
+  
+}
 
 
 #' Function to make a species mu matrix, create species object, and save it 

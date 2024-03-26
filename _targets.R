@@ -112,9 +112,23 @@ list(
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
   
+  # create a list of all species to be computed
+  tar_target(species_list,
+             make_species_list(species.combination)),
+  tar_target(species.obj.id,
+             1:6),
+             # 1:dim(species_list)[1]),
+             # species_list$id.species.obj
 
-
-  #' 2. create a vector along which iterate (i.e. number of species)
+  # create species object, run in parallel (bottleneck step)
+  tar_target(species_object,
+             make_species_rds(fit.list.allspecies,
+                              species_list,
+                              species.obj.id),
+             pattern=map(species.obj.id),
+             iteration="vector",
+             format="file"),
+  # create forest id 
 
   #' 3. for each species, create all climate possible
   
