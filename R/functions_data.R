@@ -442,9 +442,12 @@ make_species_rds <- function(fit.list.allspecies, species_list, species.obj.id){
 make_simulations_equilibrium = function(species.combination,
                                         species_list, 
                                         species_object,
+                                        harv_rules.ref,
                                         id_forest){
-  species.combination=species.combination[id_forest,"species_combination"][[1]]
-  species.in=unlist(strsplit(species.combination,"\\."))
+  sp=species.combination[id_forest,"species"][[1]]
+  s_p=gsub(" ","_",sp)
+  species.comb=species.combination[id_forest,"species_combination"][[1]]
+  species.in=unlist(strsplit(species.comb,"\\."))
   clim=species.combination[id_forest,"ID.spclim"][[1]]
   
   list.species <- vector("list", length(species.in))
@@ -453,7 +456,8 @@ make_simulations_equilibrium = function(species.combination,
   for(i in 1:length(species.in)){
     id.species.obj=species_list[species_list$ID.spclim==clim &
                                   species_list$species==sp &
-                                  species_list$species_combination==species.in[i],"id.species.obj"][[1]]
+                                  species_list$species_combination==species.in[i],
+                                "id.species.obj"][[1]]
     # Identify the file in species containing species i
     species.file.i = species_object[id.species.obj]
     # Store the file in the list
@@ -475,7 +479,7 @@ make_simulations_equilibrium = function(species.combination,
                             verbose = TRUE)
   
   forest.file=paste0("rds/", s_p, "/clim_", clim,
-                     "/sim_equilibrium/", species.combination, ".rds")
+                     "/sim_equilibrium/", species.comb, ".rds")
     # Save simulation in a rdata
   create_dir_if_needed(forest.file)
   saveRDS(sim.in, forest.file)

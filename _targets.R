@@ -129,6 +129,17 @@ list(
              iteration="vector",
              format="file"),
   # create forest id 
+  tar_target(forest.obj.id,
+             1:dim(species.combination)[1]),
+  tar_target(sim_equil,
+             make_simulations_equilibrium(species.combination,
+                                          species_list,
+                                          species_object,
+                                          harv_rules.ref,
+                                          id_forest=forest.obj.id),
+             pattern=map(forest.obj.id),
+             iteration="vector",
+             format="file"),
 
   #' 3. for each species, create all climate possible
   
