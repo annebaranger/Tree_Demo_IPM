@@ -40,7 +40,7 @@ FUNDIV_plot |>
          step_max=max/15) |> 
   mutate(step=max(step_min,step_max)) |> 
   ungroup() |> 
-  select(name,step)->step_cat
+  select(name,step)->step_cat_1
 
 FUNDIV_plot |> 
   pivot_longer(cols=c("wai","sgdd")) |> 
@@ -115,22 +115,26 @@ fit.list[[s_p]] <- get(paste0("fit_", s_p))
 mu_Fasy <- make_mu_gr(
   species = s_p, fit = fit.list[[s_p]],
   mesh = c(m = 700, L = 90, U = get_maxdbh(fit.list[[s_p]]) * 1.1),
-  verbose = TRUE, stepMu = 0.0001)
+  verbose = TRUE, stepMu = 0.001)
 
-time <- 3000
+time <- 1500
 init_pop_fasy=def_initBA(20)
 Fasy <- species(IPM = mu_Fasy, init_pop = init_pop_fasy,
                 harvest_fun = def_harv)
-
 forest <- forest(species = list(mu_Fasy = Fasy))
-set.seed(42)
-memor_mu <- sim_deter_forest(forest,
-                                    tlim = time,
-                                    climate = condi.init[1,c("sgdd", "wai", "sgddb", "waib",
-                                                             "wai2", "sgdd2","PC1", "PC2", "N",
-                                                             "SDM")],
-                                    equil_dist = time, equil_time = time,
-                                    verbose = TRUE, correction = "cut")
+
+for(clim in 1:dim(condi.init.fasy)[1]){
+  set.seed(42)
+  memor_mu <- sim_deter_forest(forest,
+                               tlim = time,
+                               climate = condi.init[clim,c("sgdd", "wai", "sgddb", "waib",
+                                                        "wai2", "sgdd2","PC1", "PC2", "N",
+                                                        "SDM")],
+                               equil_dist = time, equil_time = time,
+                               verbose = TRUE, correction = "cut")
+  
+  }
+
 
 memor_mu %>%
   filter(var %in% c("BAsp", "H", "N"), ! equil, value != 0) %>%
@@ -172,4 +176,10 @@ e_memor %>%
   ggplot(aes(x = time, y = value)) +
   ylab("BA difference") +
   geom_line(size = .4, linetype = "dotted") + geom_point(size = .4) +
+  NULL
+
+e_memor %>%
+  filter(var == "n", time ==1) %>%
+  ggplot(aes(x = size, y = value, color = meth)) +
+  geom_col()
   NULL

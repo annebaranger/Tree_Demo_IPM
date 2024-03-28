@@ -82,7 +82,7 @@ list(
                                                          disturb_coef.in[disturb_coef.in$disturbance=="storm","species"][[1]]]),
   
   # Generate some harvest rules = default? ask Maskimus
-  tar_target(harv_rules.ref, c(Pmax = 0.25, dBAmin = 3, freq = 5, alpha = 1)),
+  tar_target(harv_rules.ref, c(Pmax = 0.25, dBAmin = 3, freq = 1, alpha = 1)),
   
   # Data.frame containing storm disturbance to apply
   tar_target(disturbance.df_storm, data.frame(
@@ -111,14 +111,14 @@ list(
                                        nsp_per_richness=10,
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
-  
+  # tar_target(species.combination.n,
+  #            transform(species.combination,
+  #                      n_combi = seq_len(nrow(species.combination)))),
   # create a list of all species to be computed
   tar_target(species_list,
              make_species_list(species.combination)),
   tar_target(species.obj.id,
-             1:6),
-             # 1:dim(species_list)[1]),
-             # species_list$id.species.obj
+             1:12),#species_list$id.species.obj),
 
   # create species object, run in parallel (bottleneck step)
   tar_target(species_object,
@@ -129,19 +129,50 @@ list(
              iteration="vector",
              format="file"),
   # create forest id 
-  tar_target(forest.obj.id,
-             1:dim(species.combination)[1]),
+  tar_target(sim_forest_list,
+             create_simulation_1sp_list(species.combination,
+                                        species_list,
+                                        species.obj.id)),
+  tar_target(sim_equil.id,
+             sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
+  # simulation until equilibrium
   tar_target(sim_equil,
-             make_simulations_equilibrium(species.combination,
+             make_simulations_equilibrium(sim_forest_list$list.forests,
                                           species_list,
                                           species_object,
                                           harv_rules.ref,
+                                          id_forest=sim_equil.id),
+             pattern=map(sim_equil.id),
+             iteration="vector",
+             format="file"),
+
+  # simulation for invasion
+  tar_target(sim_invasion,
+             make_simulations_invasion(species.combination,
+                                       species_list,
+                                       species_object,
+                                       harv_rules.ref,
+                                       sim_equil,
+                                       threshold_pop=200,
+                                       id_forest=forest.obj.id),
+             pattern=map(forest.obj.id),
+             iteration="vector",
+             format="file"),
+  
+  # simulation for disturbance
+  tar_target(sim_disturbance,
+             make_simulations_disturbance(species.combination,
+                                          species_list,
+                                          species_object,
+                                          harv_rules.ref,
+                                          sim_equil,
+                                          disturb_coef.in,
+                                          disturbance.df_storm,
                                           id_forest=forest.obj.id),
              pattern=map(forest.obj.id),
              iteration="vector",
              format="file"),
-
-  #' 3. for each species, create all climate possible
+  
   
   #' 4. create a species list
   
