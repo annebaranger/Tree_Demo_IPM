@@ -111,14 +111,26 @@ list(
                                        nsp_per_richness=10,
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
-  # tar_target(species.combination.n,
-  #            transform(species.combination,
-  #                      n_combi = seq_len(nrow(species.combination)))),
+ 
+  
   # create a list of all species to be computed
   tar_target(species_list,
              make_species_list(species.combination)),
+
+  # subselect species and climate to fit
+  tar_target(species.select,
+             "Abies alba"),# gsub("_"," ",species.list.ipm)),
+  tar_target(clim.select,
+            1:6), #:80
+  tar_target(species.combination.select,
+             species.combination |> 
+               filter(species%in%species.select) |> 
+               filter(ID.spclim%in% clim.select)),
   tar_target(species.obj.id,
-             1:12),#species_list$id.species.obj),
+             species_list |> 
+               filter(species%in%species.select) |> 
+               filter(ID.spclim%in% clim.select) |>
+               pull(id.species.obj)),#species_list$id.species.obj),
 
   # create species object, run in parallel (bottleneck step)
   tar_target(species_object,
@@ -130,9 +142,7 @@ list(
              format="file"),
   # create forest id 
   tar_target(sim_forest_list,
-             create_simulation_1sp_list(species.combination,
-                                        species_list,
-                                        species.obj.id)),
+             create_simulation_equil_list(species.combination.select)),
   tar_target(sim_equil.id,
              sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
   # simulation until equilibrium
@@ -147,29 +157,31 @@ list(
              format="file"),
 
   # simulation for invasion
+  tar_target(sim_invasion.id,
+             sim_forest_list$id.simul_forest),
   tar_target(sim_invasion,
-             make_simulations_invasion(species.combination,
+             make_simulations_invasion(sim_forest_list$list.forests,
                                        species_list,
                                        species_object,
                                        harv_rules.ref,
                                        sim_equil,
                                        threshold_pop=200,
-                                       id_forest=forest.obj.id),
-             pattern=map(forest.obj.id),
+                                       id_forest=sim_invasion.id),
+             pattern=map(sim_invasion.id),
              iteration="vector",
              format="file"),
   
   # simulation for disturbance
   tar_target(sim_disturbance,
-             make_simulations_disturbance(species.combination,
+             make_simulations_disturbance(sim_forest_list$list.forests,
                                           species_list,
                                           species_object,
                                           harv_rules.ref,
                                           sim_equil,
                                           disturb_coef.in,
                                           disturbance.df_storm,
-                                          id_forest=forest.obj.id),
-             pattern=map(forest.obj.id),
+                                          id_forest=sim_invasion.id),
+             pattern=map(sim_invasion.id),
              iteration="vector",
              format="file"),
   

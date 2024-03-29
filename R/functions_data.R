@@ -478,31 +478,32 @@ make_species_mu <- function(fit.list.allspecies,
 #' @param species_list table with all species fit info 
 #' @param species_object list of files of fitted species
 #' @param id_forest id of the forest to simulate
-create_simulation_1sp_list = function(species.combination,
-                                      species_list,
-                                      species.obj.id){
-  list.forests.bis<-species_list |> 
+create_simulation_equil_list = function(species.combination.select){
+
+  list.forest.bis<-species.combination.select |> 
+    dplyr::select(species,species_combination,
+                  wai_id,sgdd_id,ID.spclim,clim_lab,
+                  wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
+    mutate(species_partner=sub(paste0(gsub(" ","_",species),"\\."),
+                               "",
+                                species_combination),
+           species_combination=case_when(species_partner==gsub(" ","_",species)~NA,
+                                     TRUE~species_partner)) |> 
+    dplyr::select(-species_partner) |> 
+    filter(!is.na(species_combination))
+  list.forest<-species.combination.select |> 
     dplyr::select(species,species_combination,
            wai_id,sgdd_id,ID.spclim,clim_lab,
            wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
-    slice(species.obj.id) |> 
-    mutate(species_clim=paste0(species,ID.spclim))
-  list.forests<-species.combination |> 
-    dplyr::select(species,species_combination,
-           wai_id,sgdd_id,ID.spclim,clim_lab,
-           wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
-    mutate(species_clim=paste0(species,ID.spclim)) |> 
-    filter(species_clim %in% list.forests.bis$species_clim) |> 
-    rbind(list.forests.bis) |> 
+    rbind(list.forest.bis) |> 
     unique() |> 
     mutate(forest.real=grepl(gsub(" ","_",species),species_combination)) |> 
     arrange(species,ID.spclim) |> 
-    dplyr::select(-species_clim) |> 
     mutate(simul_eq=row_number())
   
-  id.simul_eq = list.forests$simul_eq
-  id.simul_forest = list.forests[list.forests$forest.real,"simul_eq"][[1]]
-  return(list(list.forests=list.forests,
+  id.simul_eq = list.forest$simul_eq
+  id.simul_forest = list.forest[list.forest$forest.real,"simul_eq"][[1]]
+  return(list(list.forests=list.forest,
               id.simul_eq=id.simul_eq,
               id.simul_forest=id.simul_forest))
   
@@ -587,8 +588,9 @@ make_simulations_invasion = function(species.combination,
                                      species_object,
                                      harv_rules.ref,
                                      sim_equil,
-                                     threshold_pop=200,
+                                     threshold_pop=0,
                                      id_forest){
+  print(id_forest)
   sp=species.combination[id_forest,"species"][[1]]
   s_p=gsub(" ","_",sp)
   species.comb=species.combination[id_forest,"species_combination"][[1]]
@@ -598,10 +600,29 @@ make_simulations_invasion = function(species.combination,
   list.species <- vector("list", length(species.in))
   names(list.species) = species.in
   
-  # Read the simulation at equilibrium
-  sim_equilibrium.in = readRDS(sim_equil[id_forest])
+  if(length(species.in)>1){
+    simul_eq.partner=species.combination |> 
+      filter(species==sp &
+               species_combination==sub(paste0(s_p,"\\."),"",species.comb) &
+               ID.spclim == clim) |> 
+      pull(simul_eq)
+    simul_eq.species=species.combination |> 
+      filter(species==sp &
+               species_combination==s_p &
+               ID.spclim == clim) |> 
+      pull(simul_eq)
+    # Read the simulation at equilibrium
+    sim_equilibrium.partner.in = readRDS(sim_equil[simul_eq.partner])
+    sim_equilibrium.species.in = readRDS(sim_equil[simul_eq.species])
+    
+    sim_equilibrium.in=rbind(sim_equilibrium.partner.in,
+                             sim_equilibrium.species.in)
+    
+  }else{
+    sim_equilibrium.in= readRDS(sim_equil[id_forest])
+  }
   
-  # Checked that the population reached equilibrium
+  
   reached_equil = ifelse(
     is.na(sum((sim_equilibrium.in %>%
                  filter(var == "BAsp") %>%
@@ -609,12 +630,10 @@ make_simulations_invasion = function(species.combination,
     FALSE, TRUE
   )
   
-  
   # Only make the simulation if population reached an equilibrium
   if(reached_equil){
     # Loop on all species
     for(i in 1:length(species.in)){
-      
       id.species.obj=species_list[species_list$ID.spclim==clim &
                                     species_list$species==sp &
                                     species_list$species_combination==species.in[i],
@@ -624,14 +643,19 @@ make_simulations_invasion = function(species.combination,
       # Store the file in the list
       list.species[[i]] = readRDS(species.file.i)
       
-      
-      # Extract the equilibrium for species i
-      equil.i = sim_equilibrium.in %>%
-        filter(var == "n", equil, species == species.in[i]) %>%  
-        mutate(value=case_when(size>threshold_pop~0,
-                               TRUE~value)) |>
-        mutate(BAtot=sum((size/2000)^2*pi*value)) |> 
-        pull(value)
+      if(species.in[i]!=s_p){
+        equil.i = sim_equilibrium.in %>%
+          filter(var == "n", equil, species == species.in[i]) %>% 
+          pull(value)
+      }else{
+        # Extract the equilibrium for species i
+        equil.i = sim_equilibrium.in %>%
+          filter(var == "n", equil, species == species.in[i]) %>%  
+          mutate(value=case_when(size>threshold_pop~0,
+                                 TRUE~value)) |>
+          mutate(BAtot=sum((size/2000)^2*pi*value)) |> 
+          pull(value)
+      }
       
       # Initiate the population at equilibrium
       list.species[[i]]$init_pop <- def_init_k(equil.i)
@@ -640,9 +664,7 @@ make_simulations_invasion = function(species.combination,
       list.species[[i]]$disturb_fun <- disturb_fun
       
     }
-    
-    
-    # Make forest
+      # Make forest
     forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
     
     # Run simulation till equilibrium
