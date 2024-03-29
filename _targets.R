@@ -89,9 +89,9 @@ list(
     type = rep("storm", 3), intensity = rep(0.5, 3), 
     IsSurv = rep(FALSE, 3), t = c(500:502))),
 
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Prepare data for simulations - Monospecific ---
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Prepare data for simulations -
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   #' for each species define climatic combination of sggd/wai
 
   tar_target(climate.cat,
@@ -145,6 +145,10 @@ list(
              create_simulation_equil_list(species.combination.select)),
   tar_target(sim_equil.id,
              sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
+  
+  #%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make simulations -
+  #%%%%%%%%%%%%%%%%%%%%%%
   # simulation until equilibrium
   tar_target(sim_equil,
              make_simulations_equilibrium(sim_forest_list$list.forests,
@@ -185,38 +189,25 @@ list(
              iteration="vector",
              format="file"),
   
+  #%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make mu matrix sim -
+  #%%%%%%%%%%%%%%%%%%%%%%%%
   
-  #' 4. create a species list
-  
-  #' 5. vector of ID per climate /species ?
-  
-  #' 6. create directory of species object
-  tar_target(ID.model,
-             1:4),
-  tar_target(species_clim,
-             make_species_mu(fit.list.allspecies=fit.list.allspecies,
-                             species.list.ipm=species.list.ipm, 
-                             sp_id=sp_id),
-             pattern=map(sp_id),
-             iteration="vector",
-             format="file"),
+  # tar_target(ID.model,
+  #            1:4),
+  # tar_target(species_clim,
+  #            make_species_mu(fit.list.allspecies=fit.list.allspecies,
+  #                            species.list.ipm=species.list.ipm, 
+  #                            sp_id=sp_id),
+  #            pattern=map(sp_id),
+  #            iteration="vector",
+  #            format="file"),
 
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Make simulations - Monospecific ---
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  #' 1. vector of sim
+  #%%%%%%%%%%%%%%%%%%%
+  # -- Make analysis -
+  #%%%%%%%%%%%%%%%%%%%
   
-  #' 2. simulation of equilibrium
   
-  #' 3. simulation with perturbation
-  
-  #' 4. simulation starting from 1m2 (but equil distrib)
-  
-  #' 5. IBM
-  
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Make analysis - Monospecific ---
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   #' 1. Extract resilience metric
   
   #' 2. extract parameters of each climatic conditions (earlier?)
@@ -229,13 +220,7 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare data for simulations -----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  
-  # Generate some climates
-  # -- iterations along all climates that will be created (one iteration per climate)
-  tar_target(ID.climate_storm, c(1:10)),
-  # -- list of climates
-  tar_target(climate_list_storm, create_climate_list(length(ID.climate_storm), 
-                                                     quantile.range = c(0.2, 1))),
+
   # -- generate one climate object per iteration with branching
   # tar_target(climate_storm, make_climate(
   #   FUNDIV_climate_species, quantiles.in = climate_list_storm[[ID.climate_storm]], 

@@ -6,7 +6,7 @@
 #' @name functions_data.R  
 #' @description R script containing all functions relative to data
 #               importation and formatting
-#' @author Anne Baranger, Julien Barrere
+#' @author Anne Baranger, Julien Barrere, Maxime Jaunatre
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -161,34 +161,6 @@ load_param_demo <- function(species.names){
   return(fit.list)
   
 }
-
-
-#' Function that creates climate list based on quantiles
-#' @param n.clim integer: number of climate to create in the list
-#' @param quantile.range numeric vector of length two indicating the climatic range 
-#' @author Julien Barrere
-
-create_climate_list = function(n.clim, quantile.range = c(0, 1)){
-  
-  # Vector that contains a sequence of quantiles value from 0 to 1
-  vec.in = seq(from = quantile.range[1], to = quantile.range[2], 
-               length.out = n.clim+1)
-  
-  # Initialize the output list
-  list.out = vector(mode = "list", length = n.clim)
-  
-  # Loop on all climates
-  for(i in 1:n.clim){
-    # Attribute a name to climate i
-    names(list.out)[i] = paste("quantile", vec.in[i], vec.in[i+1], sep = "_")
-    # Add vector of quantile for climate i
-    list.out[[i]] = c(vec.in[i], vec.in[i+1])
-  }
-  
-  # Return final list
-  return(list.out)
-}
-
 
 
 #' Function to generate a list with climate per species
@@ -818,3 +790,22 @@ disturb_fun <- function(x, species, disturb = NULL, ...){
   return(x* Pkill) # always return the mortality distribution
 }
 
+
+
+#' Function to compute invasion rate for a simulation
+#' @param species.combination table with all species combi for each climate cat
+#' @param sim_invasion table with all species fit info 
+#' @param id_forest id of the forest to simulate
+get_invasion_rate<-function(species.combination,
+                            sim_invasion,
+                            id_forest){
+  for (i in 1:length(sim_invasion)){
+    # Printer
+    print(paste0("Reading simulation ", i, "/", length(sim_invasion)))
+    
+    # Read simulation i
+    sim.i = readRDS(sim_disturbance[i])
+    
+    
+  }
+}
