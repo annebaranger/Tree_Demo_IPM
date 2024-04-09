@@ -121,7 +121,7 @@ list(
   tar_target(species.select,
              "Abies alba"),# gsub("_"," ",species.list.ipm)),
   tar_target(clim.select,
-            1:6), #:80
+            1:52), #:80
   tar_target(species.combination.select,
              species.combination |> 
                filter(species%in%species.select) |> 
@@ -176,6 +176,9 @@ list(
              format="file"),
   
   # simulation for disturbance
+  tar_target(sim_dist.id,
+             create_simulation_dist_list(sim_forest_list$list.forests,
+                                         species.list.disturbance)),
   tar_target(sim_disturbance,
              make_simulations_disturbance(sim_forest_list$list.forests,
                                           species_list,
@@ -184,8 +187,8 @@ list(
                                           sim_equil,
                                           disturb_coef.in,
                                           disturbance.df_storm,
-                                          id_forest=sim_invasion.id),
-             pattern=map(sim_invasion.id),
+                                          id_forest=sim_dist.id),
+             pattern=map(sim_dist.id),
              iteration="vector",
              format="file"),
   
@@ -207,7 +210,18 @@ list(
   # -- Make analysis -
   #%%%%%%%%%%%%%%%%%%%
   
-  
+  #' 1. Compute invasion rate
+  tar_target(invasion_metric,
+             get_invasion_rate(species.combination=sim_forest_list$list.forests,
+                              id.simul_forest=sim_forest_list$id.simul_forest,
+                              sim_invasion=sim_invasion,
+                              fit.list.allspecies=fit.list.allspecies)),
+  tar_target(disturbance_metric,
+             get_resilience_metrics(species.combination=sim_forest_list$list.forests,
+                                    sim_dist.id,
+                                    sim_disturbance,
+                                    fit.list.allspecies,
+                                    disturbance.df_storm)),
   #' 1. Extract resilience metric
   
   #' 2. extract parameters of each climatic conditions (earlier?)
