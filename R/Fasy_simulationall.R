@@ -61,7 +61,14 @@ sim.in  %>%
   geom_line(linewidth = .4) + ylab("BA") +
   stat_summary(fun = "sum",  aes(col="Total"),
                geom ='line', linetype = "dashed", linewidth = .3)
+sim.in = sim_indiv_forest(
+  forest.in, tlim = 500,
+  verbose = TRUE)
 
+sim.in  %>%
+  dplyr::filter(var == "N", ! equil) %>%
+  ggplot(aes(x = time, y = value, color = species)) +
+  geom_line(linewidth = .4) + ylab("N") 
 
 sim.in  %>%
   filter(species=="Fagus_sylvatica") |> 

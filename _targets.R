@@ -192,6 +192,9 @@ list(
              iteration="vector",
              format="file"),
   
+  # simulation for ibm
+  tar_target(sim_ibm.id,
+             sim_forest_list$id.simul_forest),
   #%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mu matrix sim -
   #%%%%%%%%%%%%%%%%%%%%%%%%
