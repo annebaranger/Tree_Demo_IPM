@@ -362,8 +362,7 @@ make_species_list <- function(species.combination){
     mutate(species_combination=strsplit(species_combination,"\\.")) |> 
     unnest(cols = species_combination) |> 
     unique() |> 
-    mutate(file.ipm=paste0("rds/",gsub(" ","_",species),"/clim_",ID.spclim,"/",species_combination,".rds"),
-           id.species.obj=row_number())
+    mutate(file.ipm=paste0("rds/",gsub(" ","_",species),"/clim_",ID.spclim,"/",species_combination,".rds"))
   
   return(species_list)
 }
@@ -454,13 +453,16 @@ create_simulation_equil_list = function(species.combination.select){
                   wai_id,sgdd_id,ID.spclim,clim_lab,
                   wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
     rowwise() |> 
-    mutate(species_partner=sub(paste0(gsub(" ","_",species),"\\."),
-                               "",
-                                species_combination),
-           species_combination=case_when(species_partner==gsub(" ","_",species)~NA,
-                                     TRUE~species_partner)) |> 
+    mutate(s_p=gsub(" ","_",species),
+           species_partner=if_else(sub(paste0(s_p,"\\."),"",species_combination)==species_combination,
+                                   if_else(sub(paste0("\\.",s_p),"",species_combination)==species_combination,
+                                           NA,
+                                           sub(paste0("\\.",s_p),"",species_combination)),
+                                   sub(paste0(s_p,"\\."),"",species_combination)),
+           species_combination=case_when(species_partner==s_p~NA,
+                                         TRUE~species_partner)) |> 
     ungroup() |> 
-    dplyr::select(-species_partner) |> 
+    dplyr::select(-species_partner,-s_p) |> 
     filter(!is.na(species_combination))
   list.forest<-species.combination.select |> 
     dplyr::select(species,species_combination,
@@ -578,9 +580,14 @@ make_simulations_invasion = function(species.combination,
   names(list.species) = species.in
   
   if(length(species.in)>1){
+    partner.comb=if_else(sub(paste0(s_p,"\\."),"",species.comb)==species.comb,
+                         if_else(sub(paste0("\\.",s_p),"",species.comb)==species.comb,
+                                 "Problem",
+                                 sub(paste0("\\.",s_p),"",species.comb)),
+                         sub(paste0(s_p,"\\."),"",species.comb))
     simul_eq.partner=species.combination |> 
       filter(species==sp &
-               species_combination==sub(paste0(s_p,"\\."),"",species.comb) &
+               species_combination==partner.comb &
                ID.spclim == clim) |> 
       pull(simul_eq)
     simul_eq.species=species.combination |> 
@@ -815,7 +822,7 @@ make_simulation_ibm <- function(species.combination,
         pull(value)
       
       # Initiate the population at equilibrium
-      list.species[[i]]$init_pop <- def_init_k(equil.i*0.1)
+      list.species[[i]]$init_pop <- def_init_k(equil.i)
       
       # Update disturbance function
       list.species[[i]]$disturb_fun <- disturb_fun
@@ -836,7 +843,7 @@ make_simulation_ibm <- function(species.combination,
     
     # Run simulation till equilibrium
     sim.in = sim_indiv_forest(
-      forest.in, tlim = 400,
+      forest.in, tlim = 500,
       verbose = TRUE)
   } else {
     sim.in = matrix()
@@ -852,8 +859,28 @@ make_simulation_ibm <- function(species.combination,
   return(forest.file)
   
 }
-
-
+# 
+# sim.tot=data.frame(matrix(ncol=8,nrow=0))
+# colnames(sim.tot)=c("species","var","time","mesh","size","equil","value","nsim")
+# for (i in 1:100){
+#   print(i)
+#   sim.in = sim_indiv_forest(
+#     forest.in, tlim = 1000,
+#     verbose = FALSE)
+#   sim.tot=rbind(sim.tot,
+#                 sim.in |>
+#                   filter(species=="Abies_alba") |> 
+#                   mutate(nsim=i))
+# }
+# sim.tot |> 
+#   dplyr::filter(var == "N", ! equil) %>%
+#   group_by(nsim) |>
+#   mutate(is.ext=any(value==2)) |>
+#   ungroup() |>
+#   filter(is.ext) |>
+#   # filter(nsim<6) |> 
+#   ggplot(aes(x = time, y = value, color = nsim, group=nsim)) +
+#   geom_line(linewidth = .4) + ylab("N") 
 
 #' Disturbance function
 #'
@@ -918,36 +945,39 @@ get_invasion_rate<-function(species.combination,
     # Read simulation i
     sim.i = readRDS(sim_invasion[i])
     
-    # get simulation index
-    id.sim.i=id.simul_forest[i]
-    species.i=species.combination[id.sim.i,"species"][[1]]
-    s_p.i=gsub(" ","_",species.i)
-    fit.species.i=fit.list.allspecies[[s_p.i]]
-    delay.i=as.numeric(fit.species.i$info[["delay"]])
-    
-    derivative.i <- sim.i |> 
-      filter(species==s_p.i,var=="BAsp",time>delay.i) |> 
-      mutate(der=(value-lag(value))/(time-lag(time)),
-             der2=(der-lag(der))/(time-lag(time)))
-    
-    first.extr<-derivative.i |>  
-      filter(time<1500) |> 
-      mutate(sign_eq=(sign(der2)==sign(lag(der2)))) |> 
-      filter(sign_eq==FALSE) |> slice(1) |> 
-      dplyr::select(time) |> pull(time)
-    
-    inv.1<-derivative.i |> 
-      filter(time<(first.extr-5)) |> 
-      summarise(inv_mean=mean(der,na.rm=TRUE),
-                inv_max=max(der,na.rm=TRUE))
-    
-    inv.2<-derivative.i |> 
-      filter(time<delay.i+50) |> 
-      summarise(inv_50=mean(der,na.rm=TRUE))
-    out[out$simul_eq==id.sim.i,c("inv_mean","inv_max","inv_50")]=
-      list(inv.1$inv_mean[[1]],
-        inv.1$inv_max[[1]],
-        inv.2$inv_50[[1]])
+    if(dim(sim.i)[1]>1){ # check simulation was performed (i.e. equil was reached)
+      # get simulation index
+      id.sim.i=id.simul_forest[i]
+      species.i=species.combination[id.sim.i,"species"][[1]]
+      s_p.i=gsub(" ","_",species.i)
+      fit.species.i=fit.list.allspecies[[s_p.i]]
+      delay.i=as.numeric(fit.species.i$info[["delay"]])
+      
+      derivative.i <- sim.i |> 
+        filter(species==s_p.i,var=="BAsp",time>delay.i) |> 
+        mutate(der=(value-lag(value))/(time-lag(time)),
+               der2=(der-lag(der))/(time-lag(time)))
+      
+      first.extr<-derivative.i |>  
+        filter(time<1500) |> 
+        mutate(sign_eq=(sign(der2)==sign(lag(der2)))) |> 
+        filter(sign_eq==FALSE) |> slice(1) |> 
+        dplyr::select(time) |> pull(time)
+      
+      inv.1<-derivative.i |> 
+        filter(time<(first.extr-5)) |> 
+        summarise(inv_mean=mean(der,na.rm=TRUE),
+                  inv_max=max(der,na.rm=TRUE))
+      
+      inv.2<-derivative.i |> 
+        filter(time<delay.i+50) |> 
+        summarise(inv_50=mean(der,na.rm=TRUE))
+      out[out$simul_eq==id.sim.i,c("inv_mean","inv_max","inv_50")]=
+        list(inv.1$inv_mean[[1]],
+             inv.1$inv_max[[1]],
+             inv.2$inv_50[[1]])
+    }
+
   }
   
   return(out)

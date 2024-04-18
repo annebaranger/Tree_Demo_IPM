@@ -119,23 +119,26 @@ list(
 
   # subselect species and climate to fit
   tar_target(species.select,
-             "Abies alba"),# gsub("_"," ",species.list.ipm)),
+             c("Abies alba","Fagus sylvatica")),# gsub("_"," ",species.list.ipm)),
   tar_target(clim.select,
             1:52), #:80
+  tar_target(species_list.select,
+             species_list |> 
+               filter(species%in%species.select) |> 
+               filter(ID.spclim%in% clim.select) |> 
+               mutate(id.species.obj=row_number())),
   tar_target(species.combination.select,
              species.combination |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select)),
   tar_target(species.obj.id,
-             species_list |> 
-               filter(species%in%species.select) |> 
-               filter(ID.spclim%in% clim.select) |>
+             species_list.select |> 
                pull(id.species.obj)),#species_list$id.species.obj),
 
   # create species object, run in parallel (bottleneck step)
   tar_target(species_object,
              make_species_rds(fit.list.allspecies,
-                              species_list,
+                              species_list.select,
                               species.obj.id),
              pattern=map(species.obj.id),
              iteration="vector",
@@ -152,7 +155,7 @@ list(
   # simulation until equilibrium
   tar_target(sim_equil,
              make_simulations_equilibrium(sim_forest_list$list.forests,
-                                          species_list,
+                                          species_list.select,
                                           species_object,
                                           harv_rules.ref,
                                           id_forest=sim_equil.id),
@@ -165,7 +168,7 @@ list(
              sim_forest_list$id.simul_forest),
   tar_target(sim_invasion,
              make_simulations_invasion(sim_forest_list$list.forests,
-                                       species_list,
+                                       species_list.select,
                                        species_object,
                                        harv_rules.ref,
                                        sim_equil,
@@ -181,7 +184,7 @@ list(
                                          species.list.disturbance)),
   tar_target(sim_disturbance,
              make_simulations_disturbance(sim_forest_list$list.forests,
-                                          species_list,
+                                          species_list.select,
                                           species_object,
                                           harv_rules.ref,
                                           sim_equil,
