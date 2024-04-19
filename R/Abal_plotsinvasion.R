@@ -70,10 +70,10 @@ inv_test=invasion_metric |>
   mutate(ncomb=length(unlist(strsplit(species_combination,"[.]")))) |> 
   ungroup()
 inv_test|> 
-  filter(ncomb!=1) |>
-  ggplot(aes(wai_id,sgdd_id,color=inv_50))+
+  # filter(ncomb!=1) |>
+  ggplot(aes(wai,sgdd,color=inv_50))+
   geom_point(size=6,alpha=2)+
-  facet_wrap(species~ncomb)+
+  facet_grid(species~ncomb)+
   scale_color_gradientn(colours = viridis(15))
 
 
@@ -87,12 +87,13 @@ inv_test |>
 
 inv_test |> 
   pivot_longer(cols=c("inv_mean","inv_max","inv_50"),names_to = "inv") |> 
-  group_by(species,ncomb,wai_id,sgdd_id,inv) |> 
-  summarize(mean.inv=mean(value)) |>
+  # group_by(species,ncomb,wai,sgdd,inv) |> 
+  # summarize(mean.inv=mean(value)) |>
   filter(inv=="inv_50") |> 
-  ggplot(aes(wai_id,mean.inv,color=sgdd_id))+
+  ggplot(aes(wai,value,color=sgdd))+
   geom_point()+
   facet_grid(species~ncomb)+
+  geom_smooth()+
   scale_color_gradientn(colours = viridis(15))
 
 
@@ -107,9 +108,9 @@ inv_test |>
   facet_grid(sgdd_id~wai_id)
 
 
-summary(lm(inv_50~species+ncomb+wai+sgdd,data=inv_test))
-car::Anova(lm(inv_50~species+ncomb+wai+sgdd,data=inv_test))
-
+summary(lm(inv_50~species*ncomb+species*wai+species*sgdd,data=inv_test))
+car::Anova(lm(inv_50~species*ncomb+species*wai+species*sgdd,data=inv_test))
+anova(lm(inv_50~species*ncomb+species*wai+species*sgdd,data=inv_test))
 
 tar_load(disturbance_metric)
 dist_test=disturbance_metric |>

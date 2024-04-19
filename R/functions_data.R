@@ -1099,3 +1099,85 @@ get_resilience_metrics<-function(species.combination,
   }
   return(out)
 }
+
+#' Function to extract parameter of vital rates
+#' @param species.combination table with all species combi for each climate cat
+#' @param sim_disturbance table with all species fit info 
+#' @param id_forest id of the forest to simulate
+#' @param fit.list.allspecies list of species with ipm objects, here to get the delay
+get_vitalrates_pars<-function(species_list.select,
+                              species_object,
+                              fit.list.allspecies){
+  pars_list<-  species_list.select |> 
+    cbind(file_real=unname(species_object))|> 
+    filter(gsub(" ","_",species)==species_combination) 
+  
+  for (sp in unique(pars_list$species)){
+    print(sp)
+    s_p=sub(" ","_",sp)
+    species.fit=fit.list.allspecies[[s_p]]
+    
+    for (i in 1:dim(pars_list)[1]){
+      print(i)
+      species.obj=readRDS(pars_list$file_real[i])
+      species.obj$IPM$fit
+    }
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
