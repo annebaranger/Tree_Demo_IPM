@@ -149,9 +149,24 @@ list(
   tar_target(sim_equil.id,
              sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
   
+  # create unique forest list
+  ## all forests (independant of targetted species)
+  ## mean climate of each forest
+  ## directory for the mean forest
+  
+  # make mean forest ipm
+  ## fit mean ipms
+  
   #%%%%%%%%%%%%%%%%%%%%%%
   # -- Make simulations -
   #%%%%%%%%%%%%%%%%%%%%%%
+  
+  # simulation for mean forest
+  ## sim until equil
+  ## disturbance
+  ## invasion
+  ## sensitivity??
+  
   # simulation until equilibrium
   tar_target(sim_equil,
              make_simulations_equilibrium(sim_forest_list$list.forests,
