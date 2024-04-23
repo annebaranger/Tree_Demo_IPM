@@ -443,6 +443,36 @@ make_species_mu <- function(fit.list.allspecies,
   
 }
 
+#' Function to make a list of forest and mean associated climate for mean IPMs
+#' @param FUNDIV_data 
+#' @param sim_forest_list 
+#' @author Anne Baranger
+make_mean_forest_list <- function(FUNDIV_data,
+                                  sim_forest_list=sim_forest_list[["list.forests"]]){
+  list.forest <- sim_forest_list |> 
+    pull(species_combination) |> 
+    unique() 
+  
+  
+  mean_forest_list <-FUNDIV_data |> 
+    group_by(plotcode,wai,sgdd) |> 
+    summarise(species_combination = paste(sort(unique(gsub(" ","_",species))), collapse = "."),
+              n_species = n_distinct(species), .groups = 'drop') |> 
+    ungroup() |> 
+    filter(species_combination %in% list.forest) |>
+    group_by(species_combination) |> 
+    summarise(sgdd=mean(sgdd),
+              wai=mean(wai),
+              n=n()) |> 
+    mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
+           waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0,
+           file.ipm=paste0("rds/",species_combination,"_meanClim.rds"))
+  
+  return(mean_forest_list)
+}
+
+#' Function to compute IPM for all
+
 
 #' Function to make a list of simulations till equilibrium
 #' @param species.combination.select 
@@ -497,6 +527,9 @@ create_simulation_dist_list = function(sim_forest_list,
   return(id.simul_dist)
   
 }
+
+
+
 
 
 #' Function to make a list of file s outputs of simulations till equilibrium

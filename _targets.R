@@ -150,9 +150,9 @@ list(
              sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
   
   # create unique forest list
-  ## all forests (independant of targetted species)
-  ## mean climate of each forest
-  ## directory for the mean forest
+  tar_target(sim_mean_forest_list,
+             make_mean_forest_list(FUNDIV_data,
+                                   sim_forest_list=sim_forest_list[["list.forests"]])),
   
   # make mean forest ipm
   ## fit mean ipms
