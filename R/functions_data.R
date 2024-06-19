@@ -164,6 +164,8 @@ load_param_demo <- function(species.names){
 
 
 #' Function to generate a list with climate per species
+#' @description create climate categories so that numbers of plots in each categories
+#' falls between max and min_cat
 #' @param FUNDIV_data whole dataset
 #' @param species.list.ipm list of species
 #' @param n_cat number of categories
@@ -209,6 +211,8 @@ make_climate_cat <- function(FUNDIV_data,
     step_cat$step[1]=step_cat$step[1]+5
     step_cat$step[2]=step_cat$step[2]+0.005
     
+    
+    # define numbers of breaks for sggd/wai for each species according to step_cat
     FUNDIV_plot |> 
       pivot_longer(cols=c("wai","sgdd")) |> 
       group_by(species,name) |> 
@@ -221,7 +225,7 @@ make_climate_cat <- function(FUNDIV_data,
       rename(sgdd_breaks=sgdd,wai_breaks=wai)->step_species
     
     
-    
+    # associate each plot x species to a cliamate category of the species
     FUNDIV_plotcat <- FUNDIV_plot |> 
       left_join(step_species) |> 
       group_by(species) |> 
@@ -449,6 +453,7 @@ make_species_mu <- function(fit.list.allspecies,
 #' @author Anne Baranger
 make_mean_forest_list <- function(FUNDIV_data,
                                   sim_forest_list=sim_forest_list[["list.forests"]]){
+  # extract all combination of species
   list.forest <- sim_forest_list |> 
     pull(species_combination) |> 
     unique() 
@@ -471,7 +476,15 @@ make_mean_forest_list <- function(FUNDIV_data,
   return(mean_forest_list)
 }
 
-#' Function to compute IPM for all
+#' Function to compute IPM for all mean species
+#' @param sim_mean_forest_list
+make_mean_species_list <- function(sim_mean_forest_list){
+  species_list<-sim_mean_forest_list |> 
+    mutate(species_combination=strsplit(species_combination,"\\.")) |> 
+    unnest(cols = species_combination) |> 
+    unique() |> 
+    mutate(file.ipm=paste0("rds/",gsub(" ","_",species),"/clim_",ID.spclim,"/",species_combination,".rds"))
+}
 
 
 #' Function to make a list of simulations till equilibrium
@@ -515,6 +528,9 @@ create_simulation_equil_list = function(species.combination.select){
 }
 
 #' Function to make a list of simulations for perturbations
+#' @description
+#' function that checks whether all species present in combinations have disturbance
+#' parameters, if not mark the combination as such 
 #' @param sim_forest_list
 #' @param species.list.disturbance
 create_simulation_dist_list = function(sim_forest_list,

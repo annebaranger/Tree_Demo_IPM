@@ -9,46 +9,47 @@ library(viridis)
 tar_load(invasion_metric)
 sim_forest_list=tar_read(sim_forest_list)$list.forest
 tar_load(sim_equil)
-invasion_metric_ba=invasion_metric |> 
-  mutate(ba_init=NA)
-for (i in 1:dim(invasion_metric)[1]){
-  print(i)
-  sp=invasion_metric[i,"species"][[1]]
-  s_p=gsub(" ","_",sp)
-  species.comb=invasion_metric[i,"species_combination"][[1]]
-  species.in=unlist(strsplit(species.comb,"\\."))
-  clim=invasion_metric[i,"ID.spclim"][[1]]
-  
-  if(length(species.in)>1){
-    simul_eq.partner=sim_forest_list |> 
-      filter(species==sp &
-               species_combination==sub(paste0(s_p,"\\."),"",species.comb) &
-               ID.spclim == clim) |> 
-      pull(simul_eq)
-    
-    # Read the simulation at equilibrium
-    sim_equilibrium.partner.in = readRDS(sim_equil[simul_eq.partner])
-    
-    BAeq=sum(sim_equilibrium.partner.in |> filter(var=="BAsp",equil) |> pull(value))
-    invasion_metric_ba$ba_init[i]=BAeq
-  }else{
-    # simul_eq.species=sim_forest_list |> 
-    #   filter(species==sp &
-    #            species_combination==s_p &
-    #            ID.spclim == clim) |> 
-    #   pull(simul_eq)
-    # sim_equilibrium.species.in = readRDS(sim_equil[simul_eq.species])
-    # equil.i = sim_equilibrium.species.in %>%
-    #   filter(var == "n", equil) %>%  
-    #   mutate(value=case_when(size>0~0,
-    #                          TRUE~value)) |>
-    #   mutate(BAtot=sum((100/2000)^2*pi*value)) |> View() 
-    #   pull(value)
-    invasion_metric_ba$ba_init[i]=0
-  }
-  
-}
-
+# invasion_metric_ba=invasion_metric |> 
+#   mutate(ba_init=NA)
+# for (i in 1:dim(invasion_metric)[1]){
+#   print(i)
+#   sp=invasion_metric[i,"species"][[1]]
+#   s_p=gsub(" ","_",sp)
+#   species.comb=invasion_metric[i,"species_combination"][[1]]
+#   species.in=unlist(strsplit(species.comb,"\\."))
+#   clim=invasion_metric[i,"ID.spclim"][[1]]
+#   
+#   if(length(species.in)>1){
+#     simul_eq.partner=sim_forest_list |> 
+#       filter(species==sp &
+#                species_combination==sub(paste0(s_p,"\\."),"",species.comb) &
+#                ID.spclim == clim) |> 
+#       pull(simul_eq)
+#     
+#     # Read the simulation at equilibrium
+#     sim_equilibrium.partner.in = readRDS(sim_equil[simul_eq.partner])
+#     
+#     BAeq=sum(sim_equilibrium.partner.in |> filter(var=="BAsp",equil) |> pull(value))
+#     invasion_metric_ba$ba_init[i]=BAeq
+#   }else{
+#     # simul_eq.species=sim_forest_list |> 
+#     #   filter(species==sp &
+#     #            species_combination==s_p &
+#     #            ID.spclim == clim) |> 
+#     #   pull(simul_eq)
+#     # sim_equilibrium.species.in = readRDS(sim_equil[simul_eq.species])
+#     # equil.i = sim_equilibrium.species.in %>%
+#     #   filter(var == "n", equil) %>%  
+#     #   mutate(value=case_when(size>0~0,
+#     #                          TRUE~value)) |>
+#     #   mutate(BAtot=sum((100/2000)^2*pi*value)) |> View() 
+#     #   pull(value)
+#     invasion_metric_ba$ba_init[i]=0
+#   }
+#   
+# }
+# save(invasion_metric_ba,file="invasion_metric_ba.rdata")
+load("invasion_metric_ba.rdata")
 invasion_metric_ba |>
   rowwise() |> 
   mutate(ncomb=length(unlist(strsplit(species_combination,"[.]")))) |> 

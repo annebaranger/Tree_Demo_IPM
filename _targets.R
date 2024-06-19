@@ -131,7 +131,7 @@ list(
              species.combination |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select)),
-  tar_target(species.obj.id,
+  tar_target(species.obj.id, # get Species ID 
              species_list.select |> 
                pull(id.species.obj)),#species_list$id.species.obj),
 
@@ -146,9 +146,7 @@ list(
   # create forest id 
   tar_target(sim_forest_list,
              create_simulation_equil_list(species.combination.select)),
-  tar_target(sim_equil.id,
-             sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
-  
+
   # create unique forest list
   tar_target(sim_mean_forest_list,
              make_mean_forest_list(FUNDIV_data,
@@ -168,6 +166,8 @@ list(
   ## sensitivity??
   
   # simulation until equilibrium
+  tar_target(sim_equil.id,
+             sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
   tar_target(sim_equil,
              make_simulations_equilibrium(sim_forest_list$list.forests,
                                           species_list.select,
