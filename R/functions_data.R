@@ -387,7 +387,7 @@ make_species_combinations <- function(FUNDIV_data,
     mutate(species_combination=s_p) |> 
     left_join(species.combinations |>
                 filter(species_combination==s_p),
-              by=c("wai_id","sgdd_id","species_combination")) |> 
+              by=c("clim_id","species_combination")) |> #"wai_id","sgdd_id"
     mutate(prop_cum=NA)
   
   species.combinations.other<-species.combinations |> 
@@ -400,7 +400,7 @@ make_species_combinations <- function(FUNDIV_data,
   species.clim.combi <- condi.init |>
     filter(species==sp) |>
     left_join(rbind(species.target,species.combinations.other),
-              by=c(clim_id)) |> #"wai_id","sgdd_id"
+              by=c("clim_id")) |> #"wai_id","sgdd_id"
     arrange(clim_id) #wai_id,sgdd_id
   
   # species.clim.combi="ok"
@@ -411,7 +411,7 @@ make_species_combinations <- function(FUNDIV_data,
 #' @param species.combination table of species combination for each climate cat
 make_species_list <- function(species.combination){
   species_list<-species.combination |> 
-    dplyr::select(species,wai_id,sgdd_id,ID.spclim,clim_lab, # climate info
+    dplyr::select(species,clim_id,ID.spclim,clim_lab, # climate info #wai_id,sgdd_id
            wai,sgdd,sgdd2,wai2,sgddb,waib,PC1,PC2,N,SDM, # data for IPM clim
            species_combination) |> # eponyme
     mutate(species_combination=strsplit(species_combination,"\\.")) |> 
@@ -458,6 +458,44 @@ make_species_rds <- function(fit.list.allspecies, species_list, species.obj.id){
   return(species_list$file.ipm[species.obj.id])
   
 }
+
+
+#' Function to make a species mu object, save it as rds and return filename
+#' @param fit.list.allspecies demographic parameter for all species
+#' @param condi.init table with climate condition, species and ID
+#' @param ID.model n
+#' @author Julien Barrere & Anne Baranger
+make_species_rds_mu <- function(fit.list.allspecies, species_list, species.obj.id){
+  
+  climate<-species_list[species.obj.id,c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", 
+                                         "PC1", "PC2", "N", "SDM")]
+  sp<-species_list$species_combination[species.obj.id]
+  s_p<-gsub(" ","_",sp)
+  
+  # Make IPM
+  IPM.in = make_IPM(
+    species = s_p, 
+    climate = climate, 
+    fit =  fit.list.allspecies[[s_p]],
+    clim_lab = species_list$clim_lab[species.obj.id],
+    mesh = c(m = 700, L = 100, U = as.numeric(
+      fit.list.allspecies[[s_p]]$info[["max_dbh"]]) * 1.1),
+    BA = 0:100, verbose = TRUE, correction = "none"
+  )
+  
+  # Create species object 
+  species.in = species(
+    IPM.in, init_pop = def_initBA(20), harvest_fun = def_harv, disturb_fun = def_disturb)
+  
+  # Save species object in a rdata
+  create_dir_if_needed(species_list$file.ipm[species.obj.id])
+  saveRDS(species.in, species_list$file.ipm[species.obj.id])
+  
+  # Return output list
+  return(species_list$file.ipm[species.obj.id])
+  
+}
+
 
 
 #' Function to make a species mu matrix, create species object, and save it 
