@@ -168,7 +168,8 @@ load_param_demo <- function(species.names){
 #' falls between max and min_cat
 #' @param FUNDIV_data whole dataset
 #' @param species.list.ipm list of species
-#' @param n_cat number of categories
+#' @param max_cat maximum number of categories per species
+#' @param min_cat minimum
 make_climate_cat <- function(FUNDIV_data,
                              species.list.ipm,
                              max_cat=80,
@@ -184,24 +185,7 @@ make_climate_cat <- function(FUNDIV_data,
     summarize(BA=max(BAtot)) |> 
     distinct() |> 
     ungroup()
-  # 
-  # step_cat<- FUNDIV_plot |>
-  #   pivot_longer(cols=c("wai","sgdd")) |>
-  #   group_by(species,name) |>
-  #   summarise(range_clim=quantile(value,probs = 0.95)-quantile(value,probs = 0.05)) |>
-  #   arrange(name,range_clim) |>
-  #   group_by(name) |>
-  #   mutate(extrema=case_when(range_clim==min(range_clim)~"min",
-  #                            range_clim==max(range_clim)~"max")) |>
-  #   filter(extrema%in%c("min","max")) |>
-  #   select(-species) |>
-  #   pivot_wider(names_from = extrema,
-  #               values_from = range_clim) |>
-  #   mutate(step_min=min/6,
-  #          step_max=max/15) |>
-  #   mutate(step=max(step_min,step_max)) |>
-  #   ungroup() |>
-  #   select(name,step)
+
   step_cat<- data.frame(name=c("sgdd","wai"),
                         step=c(95,0.095))
   
@@ -287,6 +271,73 @@ make_climate_cat <- function(FUNDIV_data,
   return(list(FUNDIV_plotcat=FUNDIV_plotcat,
               species.cat=condi.init))
 }
+
+
+#' Function to generate a list with climate per species over first PCA axis
+#' @description create a constant number of climate categories by species, over PCA1
+#' @param FUNDIV_data whole dataset
+#' @param species.list.ipm list of species
+#' @param n_cat number of categories
+make_climate_cat_pca <- function(FUNDIV_data,
+                                 species.list.ipm,
+                                 n_cat=10){
+  # summarize each plots 
+  FUNDIV_plot=FUNDIV_data |> 
+    filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+    dplyr::select(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
+                  species,BAtot) |> 
+    group_by(plotcode, longitude, latitude, sgdd, wai, pca1, pca2,
+             species) |> 
+    # maximum Ba per plot
+    summarize(BA=max(BAtot)) |> 
+    distinct() |> 
+    ungroup()
+  
+  FUNDIV_plotcat<-FUNDIV_plot |> 
+    filter(species %in% gsub("_"," ",species.list.ipm)) |> 
+    group_by(species) |> 
+    mutate(clim_cat=cut(pca1,
+                        breaks = quantile(pca1,probs = seq(0,1,length.out=11)),#breaks = quantile(pca1,probs = c(0,0.05,0.2375,0.2875,0.475,0.525,0.7125,0.7625,0.95,1)), 
+                        include.lowest = TRUE)) |>
+    tidyr::separate_wider_delim(cols="clim_cat",
+                                names=c("clim_low","clim_up"),
+                                delim=",",
+                                cols_remove = FALSE) |>
+    mutate(across(matches(c("low")),
+                  ~as.numeric(stringr::str_sub(.,2,-1))),
+           across(matches(c("up")),
+                  ~as.numeric(stringr::str_sub(.,1,-2)))
+    ) |>
+    ungroup()  |>
+    group_by(species) %>%
+    mutate(
+      clim_id = as.integer(factor(clim_cat))
+    ) %>%
+    # filter(clim_id%in%c(1,3,5,7,9)) |> 
+    # mutate(
+    #   clim_id = as.integer(factor(clim_cat))
+    # ) %>%
+    ungroup() 
+  
+  species.cat <- FUNDIV_plotcat |> 
+    group_by(species,clim_id,clim_low,clim_up) |> 
+    summarize(n_plot=n(),
+              wai=mean(wai,na.rm=TRUE),
+              sgdd=mean(sgdd,na.rm=TRUE)) |>
+    # create IPM vars
+    mutate(sgdd2 = sgdd^2, wai2 = wai^2, sgddb = 1/sgdd, 
+           waib = 1/(1 + wai), PC1=0, PC2=0, N = 2, SDM = 0) |> 
+    ungroup() |> 
+    group_by(species) |> 
+    mutate(ID.spclim = row_number(),
+           clim_lab=paste0("pca_",clim_id),
+           ID.species=cur_group_id()) |> 
+    ungroup()
+  
+  return(list(FUNDIV_plotcat=FUNDIV_plotcat,
+              species.cat=species.cat))
+}
+
 
 
 #' Function to identify main species combinations per species and climate category

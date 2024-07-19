@@ -95,11 +95,10 @@ list(
   #' for each species define climatic combination of sggd/wai
 
   tar_target(climate.cat,
-             make_climate_cat(FUNDIV_data,
-                              species.list.ipm,
-                              max_cat=80,
-                              min_cat=10)
-             ),
+             make_climate_cat_pca(FUNDIV_data,
+                                  species.list.ipm,
+                                  n_cat=10)
+  ),
   
   # For each cliamte condition, species combinations
   tar_target(species.combination,
