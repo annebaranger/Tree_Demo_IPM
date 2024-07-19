@@ -5,7 +5,7 @@
 #
 #' @name _targets.R  
 #' @description R script to launch the target pipeline
-#' @author Julien BARRERE, Anne Baranger, Maxime Jaunatre
+#' @author Julien BARRERE, Anne Baranger, Maxime Jaunatre, Georges Kunstler
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
