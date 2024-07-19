@@ -120,7 +120,7 @@ list(
   tar_target(species.select,
              c("Abies alba","Fagus sylvatica")),# gsub("_"," ",species.list.ipm)),
   tar_target(clim.select,
-            1:52), #:80
+            1:10), #:80
   tar_target(species_list.select,
              species_list |> 
                filter(species%in%species.select) |> 
@@ -133,15 +133,25 @@ list(
   tar_target(species.obj.id, # get Species ID 
              species_list.select |> 
                pull(id.species.obj)),#species_list$id.species.obj),
+  tar_target(species.obj.mu.id,
+             seq_along(species.select)),
 
   # create species object, run in parallel (bottleneck step)
-  tar_target(species_object,
-             make_species_rds(fit.list.allspecies,
-                              species_list.select,
-                              species.obj.id),
-             pattern=map(species.obj.id),
+  # tar_target(species_object,
+  #            make_species_rds(fit.list.allspecies,
+  #                             species_list.select,
+  #                             species.obj.id),
+  #            pattern=map(species.obj.id),
+  #            iteration="vector",
+  #            format="file"),
+  tar_target(species_object_mu,
+             make_species_mu(fit.list.allspecies,
+                             species.select,
+                             species.obj.mu.id),
+             pattern=map(species.obj.mu.id),
              iteration="vector",
              format="file"),
+  
   # create forest id 
   tar_target(sim_forest_list,
              create_simulation_equil_list(species.combination.select)),

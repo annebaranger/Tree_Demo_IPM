@@ -460,54 +460,16 @@ make_species_rds <- function(fit.list.allspecies, species_list, species.obj.id){
 }
 
 
-#' Function to make a species mu object, save it as rds and return filename
-#' @param fit.list.allspecies demographic parameter for all species
-#' @param condi.init table with climate condition, species and ID
-#' @param ID.model n
-#' @author Julien Barrere & Anne Baranger
-make_species_rds_mu <- function(fit.list.allspecies, species_list, species.obj.id){
-  
-  climate<-species_list[species.obj.id,c("sgdd", "wai", "sgddb", "waib", "wai2", "sgdd2", 
-                                         "PC1", "PC2", "N", "SDM")]
-  sp<-species_list$species_combination[species.obj.id]
-  s_p<-gsub(" ","_",sp)
-  
-  # Make IPM
-  IPM.in = make_IPM(
-    species = s_p, 
-    climate = climate, 
-    fit =  fit.list.allspecies[[s_p]],
-    clim_lab = species_list$clim_lab[species.obj.id],
-    mesh = c(m = 700, L = 100, U = as.numeric(
-      fit.list.allspecies[[s_p]]$info[["max_dbh"]]) * 1.1),
-    BA = 0:100, verbose = TRUE, correction = "none"
-  )
-  
-  # Create species object 
-  species.in = species(
-    IPM.in, init_pop = def_initBA(20), harvest_fun = def_harv, disturb_fun = def_disturb)
-  
-  # Save species object in a rdata
-  create_dir_if_needed(species_list$file.ipm[species.obj.id])
-  saveRDS(species.in, species_list$file.ipm[species.obj.id])
-  
-  # Return output list
-  return(species_list$file.ipm[species.obj.id])
-  
-}
-
-
-
 #' Function to make a species mu matrix, create species object, and save it 
 #' as rds and return filename
 #' @param fit.list.allspecies demographic parameter for all species
 #' @param ID.model n
 #' @author Anne Baranger
 make_species_mu <- function(fit.list.allspecies,
-                            species.list.ipm, 
+                            species.select, 
                             sp_id){
-  s_p=species.list.ipm[sp_id]
-  sp=gsub("_"," ",s_p)
+  sp=species.select[sp_id]
+  s_p=gsub(" ","_",sp)
   print(sp)
 
   # Make IPM
@@ -521,18 +483,18 @@ make_species_mu <- function(fit.list.allspecies,
                        init_pop = def_initBA(20),
                        harvest_fun = def_harv, 
                        disturb_fun = def_disturb)
-  mu.file=paste0("rds/",s_p,"/",s_p,"_mu.rds")
+  # mu.file=paste0("rds/",s_p,"/",s_p,"_mu.rds")
   species.file=paste0("rds/",s_p,"/",s_p,"_species.rds")
   
   
   # Save species object in a rdata
-  create_dir_if_needed(mu.file)
-  saveRDS(IPM.mu, mu.file)
+  # create_dir_if_needed(mu.file)
+  # saveRDS(IPM.mu, mu.file)
   create_dir_if_needed(species.file)
   saveRDS(species.in, species.file)
   
   # Return output list
-  return(mu.file)
+  return(species.file)
   
 }
 
@@ -582,7 +544,7 @@ create_simulation_equil_list = function(species.combination.select){
   # create all "partner" forest : forest without the targetted species
   list.forest.bis<-species.combination.select |> 
     dplyr::select(species,species_combination,
-                  wai_id,sgdd_id,ID.spclim,clim_lab,
+                  clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
                   wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
     rowwise() |> 
     mutate(s_p=gsub(" ","_",species),
@@ -598,7 +560,7 @@ create_simulation_equil_list = function(species.combination.select){
     filter(!is.na(species_combination))
   list.forest<-species.combination.select |> 
     dplyr::select(species,species_combination,
-           wai_id,sgdd_id,ID.spclim,clim_lab,
+           clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
            wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
     rbind(list.forest.bis) |> 
     unique() |> 
