@@ -126,6 +126,8 @@ list(
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select) |> 
                mutate(id.species.obj=row_number())),
+  tar_target(species_list.mu.select,
+             unique(species_list.select$species_combination)),
   tar_target(species.combination.select,
              species.combination |> 
                filter(species%in%species.select) |> 
@@ -134,7 +136,7 @@ list(
              species_list.select |> 
                pull(id.species.obj)),#species_list$id.species.obj),
   tar_target(species.obj.mu.id,
-             seq_along(species.select)),
+             seq_along(species_list.mu.select)),
 
   # create species object, run in parallel (bottleneck step)
   # tar_target(species_object,
@@ -146,7 +148,7 @@ list(
   #            format="file"),
   tar_target(species_object_mu,
              make_species_mu(fit.list.allspecies,
-                             species.select,
+                             species_list.mu.select,
                              species.obj.mu.id),
              pattern=map(species.obj.mu.id),
              iteration="vector",

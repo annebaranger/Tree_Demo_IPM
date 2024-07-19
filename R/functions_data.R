@@ -608,6 +608,7 @@ make_simulations_equilibrium = function(species.combination,
                                         species_list, 
                                         species_object,
                                         harv_rules.ref,
+                                        sim.type="mu",
                                         id_forest){
   sp=species.combination[id_forest,"species"][[1]]
   s_p=gsub(" ","_",sp)
