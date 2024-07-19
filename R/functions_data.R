@@ -545,7 +545,7 @@ create_simulation_equil_list = function(species.combination.select){
   list.forest.bis<-species.combination.select |> 
     dplyr::select(species,species_combination,
                   clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
-                  wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
+                  wai,sgdd,sgdd2,wai2,sgddb,waib,PC1,PC2,N,SDM) |> 
     rowwise() |> 
     mutate(s_p=gsub(" ","_",species),
            species_partner=if_else(sub(paste0(s_p,"\\."),"",species_combination)==species_combination,
@@ -561,7 +561,7 @@ create_simulation_equil_list = function(species.combination.select){
   list.forest<-species.combination.select |> 
     dplyr::select(species,species_combination,
            clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
-           wai,sgdd,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
+           wai,sgdd,wai2,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
     rbind(list.forest.bis) |> 
     unique() |> 
     rowwise() |> 
@@ -619,11 +619,12 @@ make_simulations_equilibrium = function(species.combination,
   list.species <- vector("list", length(species.in))
   names(list.species) = species.in
   
+  if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   for(i in 1:length(species.in)){
     id.species.obj=species_list[species_list$ID.spclim==clim &
                                   species_list$species==sp &
                                   species_list$species_combination==species.in[i],
-                                "id.species.obj"][[1]]
+                                id.obj][[1]]
     # Identify the file in species containing species i
     species.file.i = species_object[id.species.obj]
     # Store the file in the list
@@ -634,22 +635,47 @@ make_simulations_equilibrium = function(species.combination,
   # Make forest
   forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
   
+  if(sim.type=="mu"){
+    sim.in = sim_deter_forest(forest.in, 
+                              tlim = 4000,
+                              climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                      "waib", "wai2", "sgdd2", 
+                                                                      "PC1", "PC2", "N", "SDM")],
+                              equil_time = 50000, 
+                              equil_dist = 2000, 
+                              equil_diff = 0.5, 
+                              harvest = "default", 
+                              SurfEch = 0.03,
+                              verbose = TRUE)
+  }else{
+    sim.in = sim_deter_forest(forest.in, 
+                              tlim = 4000,
+                              equil_time = 50000, 
+                              equil_dist = 2000, 
+                              equil_diff = 0.5, 
+                              harvest = "default", 
+                              SurfEch = 0.03,
+                              verbose = TRUE)
+  }
   
-  sim.in = sim_deter_forest(forest.in, 
-                            tlim = 4000,
-                            equil_time = 50000, 
-                            equil_dist = 2000, 
-                            equil_diff = 0.5, 
-                            harvest = "default", 
-                            SurfEch = 0.03,
-                            verbose = TRUE)
+  reached_equil = ifelse(
+    is.na(sum((sim.in %>%
+                 filter(var == "BAsp") %>%
+                 filter(time == max(.$time) - 1))$value)), 
+    FALSE, TRUE
+  )
+  distrib_equil = sim.in %>%
+    filter(var == "n", equil)
   
-  forest.file=paste0("rds/", s_p, "/clim_", clim,
+  equil.file=paste0("rds/", s_p, "/clim_", clim,
                      "/sim_equilibrium/", species.comb, ".rds")
-  # Save simulation in a rdata
-  create_dir_if_needed(forest.file)
-  saveRDS(sim.in, forest.file)
   
+  # Save simulation in a rdata
+  create_dir_if_needed(equil.file)
+  saveRDS(list(reached_equil=reached_equil,
+               distrib_equil=distrib_equil), 
+          equil.file)
+
   return(forest.file)
   
 }
@@ -669,6 +695,7 @@ make_simulations_invasion = function(species.combination,
                                      harv_rules.ref,
                                      sim_equil,
                                      threshold_pop=0,
+                                     sim.type="mu",
                                      id_forest){
   print(id_forest)
   sp=species.combination[id_forest,"species"][[1]]
@@ -700,21 +727,20 @@ make_simulations_invasion = function(species.combination,
     sim_equilibrium.partner.in = readRDS(sim_equil[simul_eq.partner])
     sim_equilibrium.species.in = readRDS(sim_equil[simul_eq.species])
     
-    sim_equilibrium.in=rbind(sim_equilibrium.partner.in,
-                             sim_equilibrium.species.in)
+    sim_equilibrium.in=rbind(sim_equilibrium.partner.in$distrib_equil,
+                             sim_equilibrium.species.in$distrib_equil)
+    reached_equil=(sim_equilibrium.partner.in$reached_equil&
+                     sim_equilibrium.species.in$reached_equil)
     
   }else{
-    sim_equilibrium.in= readRDS(sim_equil[id_forest])
+    sim_equilibrium.in= readRDS(sim_equil[id_forest])$distrib_equil
+    reached_equil=readRDS(sim_equil[id_forest])$reached_equil
   }
   
+  # set the appropriate name for variable selection
+  if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   
-  reached_equil = ifelse(
-    is.na(sum((sim_equilibrium.in %>%
-                 filter(var == "BAsp") %>%
-                 filter(time == max(.$time) - 1))$value)), 
-    FALSE, TRUE
-  )
-  
+
   # Only make the simulation if population reached an equilibrium
   if(reached_equil){
     # Loop on all species
@@ -722,7 +748,7 @@ make_simulations_invasion = function(species.combination,
       id.species.obj=species_list[species_list$ID.spclim==clim &
                                     species_list$species==sp &
                                     species_list$species_combination==species.in[i],
-                                  "id.species.obj"][[1]]
+                                  id.obj][[1]]
       # Identify the file in species containing species i
       species.file.i = species_object[id.species.obj]
       # Store the file in the list
@@ -753,9 +779,29 @@ make_simulations_invasion = function(species.combination,
     forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
     
     # Run simulation till equilibrium
-    sim.in = sim_deter_forest(
-      forest.in, tlim = 4000, equil_time = 4000, 
-      SurfEch = 0.03, verbose = TRUE)
+    if(sim.type=="mu"){
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1500,
+                                climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                        "waib", "wai2", "sgdd2", 
+                                                                        "PC1", "PC2", "N", "SDM")],
+                                equil_time = 1500, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }else{
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1500,
+                                equil_time = 1500, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }
+
   } else {
     sim.in = matrix()
   }
@@ -787,6 +833,7 @@ make_simulations_disturbance = function(species.combination,
                                      sim_equil,
                                      disturb_coef.in,
                                      disturbance.df_storm,
+                                     sim.type="mu",
                                      id_forest){
   sp=species.combination[id_forest,"species"][[1]]
   s_p=gsub(" ","_",sp)
@@ -800,24 +847,18 @@ make_simulations_disturbance = function(species.combination,
   # Read the simulation at equilibrium
   sim_equilibrium.in = readRDS(sim_equil[id_forest])
   
-  # Checked that the population reached equilibrium
-  reached_equil = ifelse(
-    is.na(sum((sim_equilibrium.in %>%
-                 filter(var == "BAsp") %>%
-                 filter(time == max(.$time) - 1))$value)), 
-    FALSE, TRUE
-  )
-  
+  # set the appropriate name for variable selection
+  if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   
   # Only make the simulation if population reached an equilibrium
-  if(reached_equil){
+  if(sim_equilibrium.in$reached_equil){
     # Loop on all species
     for(i in 1:length(species.in)){
       
       id.species.obj=species_list[species_list$ID.spclim==clim &
                                     species_list$species==sp &
                                     species_list$species_combination==species.in[i],
-                                  "id.species.obj"][[1]]
+                                  id.obj][[1]]
       # Identify the file in species containing species i
       species.file.i = species_object[id.species.obj]
       # Store the file in the list
@@ -846,10 +887,23 @@ make_simulations_disturbance = function(species.combination,
     forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
     
     # Run simulation till equilibrium
-    sim.in = sim_deter_forest(
-      forest.in, tlim = 4000, equil_time = 4000, 
-      disturbance = disturbance.df_storm,
-      verbose = TRUE)
+    # Run simulation till equilibrium
+    if(sim.type=="mu"){
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 4000,
+                                climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                        "waib", "wai2", "sgdd2", 
+                                                                        "PC1", "PC2", "N", "SDM")],
+                                equil_time = 4000, 
+                                disturbance = disturbance.df_storm,
+                                verbose = TRUE)
+    }else{
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 4000,
+                                equil_time = 4000, 
+                                disturbance = disturbance.df_storm,
+                                verbose = TRUE)
+    }
   } else {
     sim.in = matrix()
   }

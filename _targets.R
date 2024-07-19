@@ -125,9 +125,11 @@ list(
              species_list |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select) |> 
-               mutate(id.species.obj=row_number())),
+               mutate(species_combination=factor(species_combination),
+                      id.species.obj=row_number(),
+                      id.species.mu.obj=as.numeric(species_combination))),
   tar_target(species_list.mu.select,
-             unique(species_list.select$species_combination)),
+             levels(species_list.select$species_combination)),
   tar_target(species.combination.select,
              species.combination |> 
                filter(species%in%species.select) |> 
@@ -182,8 +184,9 @@ list(
   tar_target(sim_equil,
              make_simulations_equilibrium(sim_forest_list$list.forests,
                                           species_list.select,
-                                          species_object,
+                                          species_object_mu,
                                           harv_rules.ref,
+                                          sim.type="mu",
                                           id_forest=sim_equil.id),
              pattern=map(sim_equil.id),
              iteration="vector",
