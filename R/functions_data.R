@@ -362,27 +362,27 @@ make_species_combinations <- function(FUNDIV_data,
     # join with climate cat of the targetted species
     left_join(FUNDIV_plotcat |>
                 filter(species==sp) |>
-                dplyr::select(plotcode,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up),
+                dplyr::select(plotcode,clim_id,clim_low,clim_up), #wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up
               by="plotcode") |>
-    dplyr::select(treecode,plotcode,species,wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up) |>
-    filter(!is.na(wai_id)) %>%
+    dplyr::select(treecode,plotcode,species,clim_id,clim_low,clim_up) |> #wai_id,sgdd_id,wai_low,wai_up,sgdd_low,sgdd_up
+    filter(!is.na(clim_id)) %>% #wai_id
     # Group by the climatic condition and plot
-    group_by(wai_id, sgdd_id, plotcode) %>%
+    group_by(clim_id, plotcode) %>% #wai_id, sgdd_id
     # Summarize the species combination in each group, and species richness
     summarise(species_combination = paste(sort(unique(gsub(" ","_",species))), collapse = "."),
               n_species = n_distinct(species), .groups = 'drop')  |> 
     #  count each unique combination's frequency within each wai_cat and sgdd_cat group
-    count(wai_id, sgdd_id, species_combination,n_species) |>
+    count(clim_id, species_combination,n_species) |> #wai_id, sgdd_id
     filter(n_species<nsp_per_richness) |>
-    group_by(wai_id, sgdd_id) |>
+    group_by(clim_id) |> #wai_id, sgdd_id
     mutate(prop=n/sum(n)) |>
     # Optionally, arrange the results for better readability
-    arrange(wai_id, sgdd_id, desc(n)) 
+    arrange(clim_id, desc(n)) # wai_id, sgdd_id
   
   
   species.target<- FUNDIV_plotcat |>
     filter(species==sp) |> 
-    dplyr::select(wai_id,sgdd_id) |> 
+    dplyr::select(clim_id) |> # wai_id,sgdd_id
     distinct() |> 
     mutate(species_combination=s_p) |> 
     left_join(species.combinations |>
@@ -400,8 +400,8 @@ make_species_combinations <- function(FUNDIV_data,
   species.clim.combi <- condi.init |>
     filter(species==sp) |>
     left_join(rbind(species.target,species.combinations.other),
-              by=c("wai_id","sgdd_id")) |>
-    arrange(wai_id,sgdd_id)
+              by=c(clim_id)) |> #"wai_id","sgdd_id"
+    arrange(clim_id) #wai_id,sgdd_id
   
   # species.clim.combi="ok"
   return(species.clim.combi)
