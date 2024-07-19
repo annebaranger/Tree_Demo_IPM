@@ -70,7 +70,7 @@ list(
   tar_target(fit.list.allspecies, load_param_demo(all.species.name)),
   
   # Mention species to exclude
-  tar_target(species.excl.ipm,c("Carpinus_betulus", "Quercus_ilex", "Salix_caprea")),
+  tar_target(species.excl.ipm,c("Carpinus_betulus","Juniperus_thurifera" ,"Quercus_ilex", "Salix_caprea")),
   
   # Get all species for which IPM are available, and Fundiv data
   tar_target(species.list.ipm,names(fit.list.allspecies)[!names(fit.list.allspecies) %in%
