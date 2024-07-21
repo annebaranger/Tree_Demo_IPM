@@ -676,7 +676,7 @@ make_simulations_equilibrium = function(species.combination,
                distrib_equil=distrib_equil), 
           equil.file)
 
-  return(forest.file)
+  return(equil.file)
   
 }
 
@@ -845,13 +845,14 @@ make_simulations_disturbance = function(species.combination,
   names(list.species) = species.in
   
   # Read the simulation at equilibrium
-  sim_equilibrium.in = readRDS(sim_equil[id_forest])
+  sim_equilibrium.in = readRDS(sim_equil[id_forest])$distrib_equil
+  reached_equil = readRDS(sim_equil[id_forest])$reached_equil
   
   # set the appropriate name for variable selection
   if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   
   # Only make the simulation if population reached an equilibrium
-  if(sim_equilibrium.in$reached_equil){
+  if(reached_equil){
     # Loop on all species
     for(i in 1:length(species.in)){
       
