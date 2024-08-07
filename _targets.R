@@ -69,6 +69,10 @@ list(
   # Get demographic parameters for all species
   tar_target(fit.list.allspecies, load_param_demo(all.species.name)),
   
+  # get parameters names
+  tar_target(pars_list,
+             get_list_pars(fit.list.allspecies)),
+  
   # Mention species to exclude
   tar_target(species.excl.ipm,c("Carpinus_betulus","Juniperus_thurifera" ,"Quercus_ilex", "Salix_caprea")),
   
@@ -251,13 +255,13 @@ list(
                               id.simul_forest=sim_forest_list$id.simul_forest,
                               sim_invasion=sim_invasion,
                               fit.list.allspecies=fit.list.allspecies)),
-  tar_target(disturbance_metric,
+  #' 2. Extract resilience metric
+    tar_target(disturbance_metric,
              get_resilience_metrics(species.combination=sim_forest_list$list.forests,
                                     sim_dist.id,
                                     sim_disturbance,
                                     fit.list.allspecies,
                                     disturbance.df_storm)),
-  #' 1. Extract resilience metric
   
   #' 2. extract parameters of each climatic conditions (earlier?)
   

@@ -498,6 +498,49 @@ make_species_mu <- function(fit.list.allspecies,
   
 }
 
+
+#' Function to make a species mu matrix with a slightly modification of one pars,
+#'  create species object, and save it as rds and return filename
+#' @param fit.list.allspecies demographic parameter for all species
+#' @param species.select list a species to run
+#' @param sp_id species id to run
+#' @param pars_id parameter id to modify
+#' @author Anne Baranger
+make_species_mu_elast <- function(fit.list.allspecies,
+                                  species.select,
+                                  sp_id,
+                                  pars_id){
+  sp=species.select[sp_id]
+  s_p=gsub(" ","_",sp)
+  print(sp)
+  
+  # Make IPM
+  IPM.mu <- make_mu_gr(
+    species = s_p, fit = fit.list.allspecies[[s_p]],
+    mesh = c(m = 700, L = 90, U = get_maxdbh(fit.list.allspecies[[s_p]]) * 1.1),
+    verbose = TRUE, stepMu = 0.0001)
+  
+  # Create species object 
+  species.in = species(IPM=IPM.mu,
+                       init_pop = def_initBA(20),
+                       harvest_fun = def_harv, 
+                       disturb_fun = def_disturb)
+  # mu.file=paste0("rds/",s_p,"/",s_p,"_mu.rds")
+  species.file=paste0("rds/",s_p,"/",s_p,"_species.rds")
+  
+  
+  # Save species object in a rdata
+  # create_dir_if_needed(mu.file)
+  # saveRDS(IPM.mu, mu.file)
+  create_dir_if_needed(species.file)
+  saveRDS(species.in, species.file)
+  
+  # Return output list
+  return(species.file)
+  
+}
+
+
 #' Function to make a list of forest and mean associated climate for mean IPMs
 #' @param FUNDIV_data 
 #' @param sim_forest_list 
@@ -1120,6 +1163,8 @@ get_invasion_rate<-function(species.combination,
         filter(sign_eq==FALSE) |> slice(1) |> 
         dplyr::select(time) |> pull(time)
       
+      first.extr=ifelse(length(first.extr)==0,50,first.extr)
+      
       inv.1<-derivative.i |> 
         filter(time<(first.extr-5)) |> 
         summarise(inv_mean=mean(der,na.rm=TRUE),
@@ -1282,29 +1327,19 @@ get_vitalrates_pars<-function(species_list.select,
   
   
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
 }
 
 
-
+get_list_pars<-function(fit.list.allspecies){
+  sp_ex=fit.list.allspecies[[1]]
+  n_pars=length(sp_ex$sv$params_m)+length(sp_ex$gr$params_m)+
+    length(sp_ex$rec$params_m)
+  list_par=c()
+  for (vr in c("sv","gr","rec")){
+    list_par=c(list_par,paste0(vr,"_",names(sp_ex[[vr]]$params_m)))
+  }
+  return(list_par)
+}
 
 
 
