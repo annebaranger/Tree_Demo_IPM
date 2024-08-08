@@ -22,7 +22,7 @@ library(targets)
 # lapply(grep("R$", list.files("R"), value = TRUE), function(x) source(file.path("R", x)))
 source("R/functions_data.R")
 # install if needed and load packages
-packages.in <- c("dplyr", "ggplot2", "matreex", "tidyr", "data.table", 
+packages.in <- c("dplyr", "ggplot2", "matreex", "tidyr", "data.table", "stringr",
                  "factoextra", "modi", "sf", "rnaturalearth", "scales", 
                  "cowplot", "multcomp", "piecewiseSEM", "future", "FD", "GGally", 
                  "statmod", "xtable", "car", "modi", "grid", "gridExtra", "semEff")
@@ -138,9 +138,9 @@ list(
              species.combination |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select)),
-  tar_target(species.obj.id, # get Species ID 
-             species_list.select |> 
-               pull(id.species.obj)),#species_list$id.species.obj),
+  # tar_target(species.obj.id, # get Species ID 
+  #            species_list.select |> 
+  #              pull(id.species.obj)),#species_list$id.species.obj),
   tar_target(species.obj.mu.id,
              seq_along(species_list.mu.select)),
 
@@ -160,14 +160,25 @@ list(
              iteration="vector",
              format="file"),
   
+  tar_target(species_object_mu_elast,
+             make_species_mu_elast(fit.list.allspecies,
+                                   species_list.mu.select,
+                                   delta=0.01,
+                                   pars_list,
+                                   sp_id=species.obj.mu.id,
+                                   pars_id=pars_list),
+             pattern=cross(species.obj.mu.id,pars_list),
+             iteration="vector",
+             format="file"),
+  
   # create forest id 
   tar_target(sim_forest_list,
              create_simulation_equil_list(species.combination.select)),
 
   # create unique forest list
-  tar_target(sim_mean_forest_list,
-             make_mean_forest_list(FUNDIV_data,
-                                   sim_forest_list=sim_forest_list[["list.forests"]])),
+  # tar_target(sim_mean_forest_list,
+  #            make_mean_forest_list(FUNDIV_data,
+  #                                  sim_forest_list=sim_forest_list[["list.forests"]])),
   
   # make mean forest ipm
   ## fit mean ipms
@@ -231,6 +242,24 @@ list(
   # simulation for ibm
   tar_target(sim_ibm.id,
              sim_forest_list$id.simul_forest),
+  
+  # simulation for sensitivity
+  
+  # # equil
+  tar_target(sim_equil_elast.id,
+             sim_forest_list$id.simul_forest),
+  tar_target(sim_equil_elast,
+             make_simulations_equilibrium(sim_forest_list$list.forests,
+                                          species_list.select,
+                                          species_object_mu,
+                                          species_object_mu_elast,
+                                          harv_rules.ref,
+                                          sim.type="mu",
+                                          id_forest=sim_equil_elast.id),
+             pattern=map(sim_equil_elast.id),
+             iteration="vector",
+             format="file"),
+  
   #%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mu matrix sim -
   #%%%%%%%%%%%%%%%%%%%%%%%%
