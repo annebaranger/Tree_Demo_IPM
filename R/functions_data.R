@@ -422,6 +422,38 @@ make_species_list <- function(species.combination){
   return(species_list)
 }
 
+#' Function create a list of all species object to be created
+#' @param species.combination table of species combination for each climate cat
+#' @param pars_list
+make_species_select_list_elast <- function(species.combination,
+                                           pars_list){
+  split_pars <- lapply(pars_list, function(x) str_split(x, pattern = "-")[[1]])
+  pars_df <- data.frame(
+    s_p = sapply(split_pars, `[`, 1),
+    gr = sapply(split_pars, `[`, 2),
+    param = sapply(split_pars, `[`, 3),
+    elast=pars_list
+  ) |> 
+    mutate(sp=str_replace(s_p,"_"," "))
+  
+  species_list<-species.combination |> 
+    left_join(pars_df,by=c("species"="sp")) |>
+    dplyr::select(species,s_p,elast,clim_id,ID.spclim,clim_lab, # climate info #wai_id,sgdd_id
+                  wai,sgdd,sgdd2,wai2,sgddb,waib,PC1,PC2,N,SDM, # data for IPM clim
+                  species_combination) |> # eponyme
+    mutate(species_combination=strsplit(species_combination,"\\.")) |> 
+    unnest(cols = species_combination) |> 
+    mutate(species_combination=factor(species_combination),
+           id.species.mu.obj=as.numeric(species_combination)) |> 
+    mutate(species_combination=case_when(s_p==species_combination~elast,
+                                         TRUE~species_combination)) |> 
+    mutate(elast=factor(elast),
+           id.species.elast.obj=as.numeric(elast)) |> 
+    unique() 
+  
+  return(species_list)
+}
+
 
 #' Function to make a species object, save it as rds and return filename
 #' @param fit.list.allspecies demographic parameter for all species
@@ -509,21 +541,18 @@ make_species_mu <- function(fit.list.allspecies,
 #' @param pars_id parameter id to modify
 #' @author Anne Baranger
 make_species_mu_elast <- function(fit.list.allspecies,
-                                  species.select,
                                   delta=0.01,
-                                  pars_list,
-                                  sp_id,
-                                  pars_id){
-  sp=species.select[sp_id]
-  s_p=gsub(" ","_",sp)
+                                  pars_select){
+  # get species
+  s_p=strsplit(pars_select, split = '-')[[1]][1]
+  sp=gsub("_"," ",s_p)
   print(sp)
-  pars=str_split(pars_list[pars_id],"_", simplify = T)[2]
-  vr=str_split(pars_list[pars_id],"_", simplify = T)[1]
+  # get vital rates and parameter to disturb
+  vr=strsplit(pars_select, split = '-')[[1]][2]
+  pars=strsplit(pars_select, split = '-')[[1]][3]
+  # get fit
   fit_sp=fit.list.allspecies[[s_p]]
-  
-  if(pars %in% names(fit_sp[[vr]]$params_m)){
-    
-  }
+  # disturb parameter
   fit_sp[[vr]]$params_m[[pars]]<-fit_sp[[vr]]$params_m[[pars]]*(1+delta)
   
   
@@ -538,14 +567,11 @@ make_species_mu_elast <- function(fit.list.allspecies,
                        init_pop = def_initBA(20),
                        harvest_fun = def_harv, 
                        disturb_fun = def_disturb)
-  # mu.file=paste0("rds/",s_p,"/",s_p,"_mu.rds")
-  species.file=paste0("rds/",s_p,"/",s_p,"_",vr,"-",
-                      str_replace(pars, ":","x"),
+  species.file=paste0("rds/",s_p,"/",
+                      gsub(":","x", pars_select), #because ":" are not supported in filenames
                       ".rds")
   
   # Save species object in a rdata
-  # create_dir_if_needed(mu.file)
-  # saveRDS(IPM.mu, mu.file)
   create_dir_if_needed(species.file)
   saveRDS(species.in, species.file)
   
@@ -635,6 +661,67 @@ create_simulation_equil_list = function(species.combination.select){
   
 }
 
+#' Function to make a list of simulations till equilibrium for elasticity analysis
+#' @param species.combination.select 
+#' @param pars_select list of species and params for elasticity
+create_simulation_equil_list_elast <- function(species.combination.select,
+                                               sim_forest_list,
+                                               pars_select){
+  split_pars <- lapply(pars_select, function(x) str_split(x, pattern = "-")[[1]])
+  pars_df <- data.frame(
+    sp = sapply(split_pars, `[`, 1),
+    gr = sapply(split_pars, `[`, 2),
+    param = sapply(split_pars, `[`, 3),
+    elast=pars_select) |>
+    mutate(sp=str_replace(sp,"_"," "))
+    
+  
+  # create all "partner" forest : forest without the targetted species
+  list.forest.bis<-species.combination.select |> 
+    left_join(pars_df,by=c("species"="sp")) |> 
+    dplyr::select(species,elast,species_combination,
+                  clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
+                  wai,sgdd,sgdd2,wai2,sgddb,waib,PC1,PC2,N,SDM) |> 
+    rowwise() |> 
+    mutate(s_p=gsub(" ","_",species),
+           species_partner=if_else(sub(paste0(s_p,"\\."),"",species_combination)==species_combination,
+                                   if_else(sub(paste0("\\.",s_p),"",species_combination)==species_combination,
+                                           NA,
+                                           sub(paste0("\\.",s_p),"",species_combination)),
+                                   sub(paste0(s_p,"\\."),"",species_combination)),
+           species_combination=case_when(species_partner==s_p~NA,
+                                         TRUE~species_partner)) |> 
+    ungroup() |> 
+    dplyr::select(-species_partner,-s_p) |> 
+    filter(!is.na(species_combination)) |> 
+    left_join(sim_forest_list[,c("species","species_combination","clim_id","simul_eq")],
+              by=c("species","species_combination","clim_id"))
+  list.forest<-species.combination.select |> 
+    left_join(pars_df,by=c("species"="sp")) |> 
+    dplyr::select(species,elast,species_combination,
+                  clim_id,ID.spclim,clim_lab, #wai_id,sgdd_id
+                  wai,sgdd,wai2,sgdd2,sgddb,waib,PC1,PC2,N,SDM) |> 
+    mutate(simul_eq=NA) |> # because these forest are to be simulated again
+    rbind(list.forest.bis) |> 
+    rowwise() |> 
+    mutate(species_combination=gsub(gsub(" ","_",species), 
+                                    elast,
+                                    species_combination)) |> 
+    unique() |> 
+    mutate(forest.real=grepl(gsub(" ","_",species),species_combination)) |> 
+    ungroup() |> 
+    arrange(species,ID.spclim) |> 
+    mutate(simul_eq_elast=row_number())
+  
+  id.simul_eq = list.forest$simul_eq_elast
+  id.simul_forest = list.forest[list.forest$forest.real,"simul_eq_elast"][[1]]
+  return(list(list.forests=list.forest,
+              id.simul_eq=id.simul_eq,
+              id.simul_forest=id.simul_forest))
+  
+}
+
+
 #' Function to make a list of simulations for perturbations
 #' @description
 #' function that checks whether all species present in combinations have disturbance
@@ -661,9 +748,9 @@ create_simulation_dist_list = function(sim_forest_list,
 #' @param species_list table with all species fit info 
 #' @param species_object list of files of fitted species
 #' @param id_forest id of the forest to simulate
-make_simulations_equilibrium = function(species.combination,
-                                        species_list, 
-                                        species_object,
+make_simulations_equilibrium = function(species.combination, # table of all real/false forests
+                                        species_list, # list of species object id by climate
+                                        species_object, # path of species_object
                                         harv_rules.ref,
                                         sim.type="mu",
                                         id_forest){
@@ -744,14 +831,15 @@ make_simulations_equilibrium = function(species.combination,
 #' @param species_object list of files of fitted species
 #' @param id_forest id of the forest to simulate
 make_simulations_equilibrium_elast = function(species.combination,
-                                              species_list, 
-                                              species_object,
-                                              species_object_elast,
+                                              species_list_elast, 
+                                              species_object_mu,
+                                              species_object_mu_elast,
+                                              sim_equil,
                                               harv_rules.ref,
                                               sim.type="mu",
                                               id_forest){
-  sp=species.combination[id_forest,"species"][[1]]
-  s_p=gsub(" ","_",sp)
+  sp=species.combination[id_forest,"elast"][[1]]
+  # s_p=gsub(" ","_",sp)
   species.comb=species.combination[id_forest,"species_combination"][[1]]
   species.in=unlist(strsplit(species.comb,"\\."))
   clim=species.combination[id_forest,"ID.spclim"][[1]]
@@ -761,17 +849,20 @@ make_simulations_equilibrium_elast = function(species.combination,
   
   if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   for(i in 1:length(species.in)){
-    id.species.obj=species_list[species_list$ID.spclim==clim &
-                                  species_list$species==sp &
-                                  species_list$species_combination==species.in[i],
-                                id.obj][[1]]
-    
-    species.file.i = ifelse(species.in[[i]]==s_p, # if species corresponds to the targetted species
-                                                 # than associate species with elastificty
-           species_object_elast[id.species.obj],
-           species_object[id.species.obj]
-           )
-    
+    if(species.in[i]==sp){
+      id.species.obj=species_list_elast[species_list_elast$ID.spclim==clim &
+                                          species_list_elast$elast==sp &
+                                          species_list_elast$species_combination==species.in[i],
+                                        "id.species.elast.obj"][[1]]
+      species.file.i=species_object_mu_elast[id.species.obj]
+    }else{
+      id.species.obj=species_list_elast[species_list_elast$ID.spclim==clim &
+                                          species_list_elast$elast==sp &
+                                          species_list_elast$species_combination==species.in[i],
+                                        "id.species.mu.obj"][[1]]
+      species.file.i=species_object_mu[id.species.obj]
+    }
+
     # Store the file in the list
     
     list.species[[i]] = readRDS(species.file.i)
@@ -962,6 +1053,163 @@ make_simulations_invasion = function(species.combination,
   # Return output list
   return(forest.file)
 }
+
+
+
+#' Function to make a list of invasion simulations
+#' @param species.combination table with all species combi for each climate cat
+#' @param species_list table with all species fit info 
+#' @param species_object list of files of fitted species
+#' @param harv_rules.ref rules for harvesting
+#' @param sim_equil path of simulation until equilibrium
+#' @param threshold_pop dimater threshold of initial population
+#' @param id_forest id of the forest to simulate
+make_simulations_invasion_elast = function(sim_forest_list_elast,
+                                           species_list_select_elast,
+                                           species_object_mu,
+                                           species_object_mu_elast,
+                                           harv_rules.ref,
+                                           sim_equil,
+                                           sim_equil_elast,
+                                           threshold_pop=0,
+                                           sim.type="mu",
+                                           id_forest){
+  species.combination=sim_forest_list_elast$list.forests
+  sim_eq_elast=sim_forest_list_elast$id.simul_forest
+  
+  print(id_forest)
+  sp=species.combination[id_forest,"elast"][[1]]
+  s_p=gsub(" ","_",species.combination[id_forest,"species"][[1]])
+  species.comb=species.combination[id_forest,"species_combination"][[1]]
+  species.in=unlist(strsplit(species.comb,"\\."))
+  clim=species.combination[id_forest,"ID.spclim"][[1]]
+  
+  list.species <- vector("list", length(species.in))
+  names(list.species) = species.in
+  
+  
+  ## load equilibrium distributions
+  if(length(species.in)>1){
+    partner.comb=if_else(sub(paste0(sp,"\\."),"",species.comb)==species.comb,
+                         if_else(sub(paste0("\\.",sp),"",species.comb)==species.comb,
+                                 "Problem",
+                                 sub(paste0("\\.",sp),"",species.comb)),
+                         sub(paste0(sp,"\\."),"",species.comb))
+    simul_eq.partner=species.combination |> 
+      filter(elast==sp &
+               species_combination==partner.comb &
+               ID.spclim == clim) |> 
+      pull(simul_eq)
+    simul_eq.species=species.combination |> 
+      filter(elast==sp &
+               species_combination==sp &
+               ID.spclim == clim) |> 
+      pull(simul_eq_elast)
+    simul_eq.species=match(simul_eq.species,sim_eq_elast) # find simulation in list
+    # Read the simulation at equilibrium
+    sim_equilibrium.partner.in = readRDS(sim_equil[simul_eq.partner])
+    sim_equilibrium.species.in = readRDS(sim_equil_elast[simul_eq.species])
+    
+    sim_equilibrium.in=rbind(sim_equilibrium.partner.in$distrib_equil,
+                             sim_equilibrium.species.in$distrib_equil)
+    reached_equil=(sim_equilibrium.partner.in$reached_equil&
+                     sim_equilibrium.species.in$reached_equil)
+    
+  }else{
+    simul_eq.species=match(id_forest,sim_eq_elast)
+    sim_equilibrium.in= readRDS(sim_equil_elast[simul_eq.species])$distrib_equil
+    reached_equil=readRDS(sim_equil[id_forest])$reached_equil
+  }
+
+  # Only make the simulation if population reached an equilibrium
+  if(reached_equil){
+    # Loop on all species
+    for(i in 1:length(species.in)){
+      if(species.in[i]!=sp){
+        id.species.obj=species_list_select_elast[species_list_select_elast$ID.spclim==clim &
+                                                   species_list_select_elast$elast==sp &
+                                                   species_list_select_elast$species_combination==species.in[i],
+                                                 "id.species.elast.obj"][[1]]
+        # Identify the file in species containing species i
+        species.file.i = species_object_mu_elast[id.species.obj]
+        # Store the file in the list
+        list.species[[i]] = readRDS(species.file.i)
+        
+        equil.i = sim_equilibrium.in %>%
+          filter(var == "n", equil, species == s_p) %>% 
+          pull(value)
+        # Initiate the population at equilibrium
+        list.species[[i]]$init_pop <- def_init_k(equil.i)
+        
+        # Update disturbance function
+        list.species[[i]]$disturb_fun <- disturb_fun
+      }else{
+        id.species.obj=species_list_select_elast[species_list_select_elast$ID.spclim==clim &
+                                                   species_list_select_elast$elast==sp &
+                                                   species_list_select_elast$species_combination==species.in[i],
+                                    "id.species.mu.obj"][[1]]
+        # Identify the file in species containing species i
+        species.file.i = species_object_mu[id.species.obj]
+        # Store the file in the list
+        list.species[[i]] = readRDS(species.file.i)
+        
+        # Extract the equilibrium for species i
+        equil.i = sim_equilibrium.in %>%
+          filter(var == "n", equil, species == species.in[i]) %>%  
+          mutate(value=case_when(size>threshold_pop~0,
+                                 TRUE~value)) |>
+          mutate(BAtot=sum((size/2000)^2*pi*value)) |> 
+          pull(value)
+        # Initiate the population at equilibrium
+        list.species[[i]]$init_pop <- def_init_k(equil.i)
+        
+        # Update disturbance function
+        list.species[[i]]$disturb_fun <- disturb_fun
+      }
+
+    }
+    # Make forest
+    forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
+    
+    # Run simulation till equilibrium
+    if(sim.type=="mu"){
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1500,
+                                climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                        "waib", "wai2", "sgdd2", 
+                                                                        "PC1", "PC2", "N", "SDM")],
+                                equil_time = 1500, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }else{
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1500,
+                                equil_time = 1500, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }
+    
+  } else {
+    sim.in = matrix()
+  }
+  
+  forest.file=paste0("rds/", s_p, "/clim_", clim,
+                     "/sim_invasion/", species.comb, ".rds")
+  # Save simulation in a rdata
+  create_dir_if_needed(forest.file)
+  saveRDS(sim.in, forest.file)
+  
+  # Return output list
+  return(forest.file)
+}
+
+
 
 
 #' Function to make a list of simulations with disturbance
@@ -1443,7 +1691,7 @@ get_list_pars<-function(fit.list.allspecies){
       length(sp_fit$rec$params_m)
     list_par=c()
     for (vr in c("sv","gr","rec")){
-      list_par=c(list_par,paste0(vr,"_",names(sp_fit[[vr]]$params_m)))
+      list_par=c(list_par,paste0(names(list_pars_sp)[sp],"-",vr,"-",names(sp_fit[[vr]]$params_m)))
     } 
     list_pars_sp[[sp]]=list_par
   }

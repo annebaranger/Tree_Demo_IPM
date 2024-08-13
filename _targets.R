@@ -124,7 +124,7 @@ list(
   tar_target(species.select,
              c("Abies alba","Fagus sylvatica")),# gsub("_"," ",species.list.ipm)),
   tar_target(clim.select,
-            1:10), #:80
+             1:10), 
   tar_target(species_list.select,
              species_list |> 
                filter(species%in%species.select) |> 
@@ -138,6 +138,7 @@ list(
              species.combination |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select)),
+  
   # tar_target(species.obj.id, # get Species ID 
   #            species_list.select |> 
   #              pull(id.species.obj)),#species_list$id.species.obj),
@@ -159,40 +160,15 @@ list(
              pattern=map(species.obj.mu.id),
              iteration="vector",
              format="file"),
-  tar_target(pars_id,
-             seq_along(pars_list)),
-  tar_target(species_object_mu_elast,
-             make_species_mu_elast(fit.list.allspecies,
-                                   species_list.mu.select,
-                                   delta=0.01,
-                                   pars_list,
-                                   sp_id=species.obj.mu.id,
-                                   pars_id=pars_id),
-             pattern=cross(species.obj.mu.id,pars_id),
-             iteration="vector",
-             format="file"),
-  
+
   # create forest id 
   tar_target(sim_forest_list,
              create_simulation_equil_list(species.combination.select)),
 
-  # create unique forest list
-  # tar_target(sim_mean_forest_list,
-  #            make_mean_forest_list(FUNDIV_data,
-  #                                  sim_forest_list=sim_forest_list[["list.forests"]])),
-  
-  # make mean forest ipm
-  ## fit mean ipms
-  
-  #%%%%%%%%%%%%%%%%%%%%%%
-  # -- Make simulations -
-  #%%%%%%%%%%%%%%%%%%%%%%
-  
-  # simulation for mean forest
-  ## sim until equil
-  ## disturbance
-  ## invasion
-  ## sensitivity??
+
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make mean simulations -
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   # simulation until equilibrium
   tar_target(sim_equil.id,
@@ -244,22 +220,71 @@ list(
   tar_target(sim_ibm.id,
              sim_forest_list$id.simul_forest),
   
+  
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make sensitivity simulations -
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+  # create objects
+  
+  ## parameters selection for species targetted
+  tar_target(pars_select,
+             unlist(lapply(gsub(" ","_",species.select),
+                           function(x){pars_list[grepl(x,pars_list)]})
+             )),
+  ## create each species object for species targetted in sensitivity analysis
+  tar_target(species_object_mu_elast,
+             make_species_mu_elast(fit.list.allspecies,
+                                   delta=0.01,
+                                   pars_select=pars_select),
+             pattern=map(pars_select),
+             iteration="vector",
+             format="file"),
+  ## create species list for species selected
+  tar_target(species_list_select_elast,
+             make_species_select_list_elast(species.combination.select,
+                                            pars_list)),
+  ## create forest list 
+  tar_target(sim_forest_list_elast,
+             create_simulation_equil_list_elast(species.combination.select,
+                                                sim_forest_list$list.forests,
+                                                pars_select)),
+  
   # simulation for sensitivity
   
   # # equil
   tar_target(sim_equil_elast.id,
-             sim_forest_list$id.simul_forest),
+             sim_forest_list_elast$id.simul_forest),
   tar_target(sim_equil_elast,
-             make_simulations_equilibrium(sim_forest_list$list.forests,
-                                          species_list.select,
-                                          species_object_mu,
-                                          species_object_mu_elast,
-                                          harv_rules.ref,
-                                          sim.type="mu",
-                                          id_forest=sim_equil_elast.id),
+             make_simulations_equilibrium_elast(sim_forest_list_elast$list.forests,
+                                                species_list_select_elast,
+                                                species_object_mu,
+                                                species_object_mu_elast,
+                                                harv_rules.ref,
+                                                sim.type="mu",
+                                                id_forest=sim_equil_elast.id),
              pattern=map(sim_equil_elast.id),
              iteration="vector",
              format="file"),
+  
+  ## invasion
+  tar_target(sim_invasion_elast.id,
+             sim_forest_list_elast$id.simul_forest),
+  tar_target(sim_invasion_elast,
+             make_simulations_invasion(sim_forest_list_elast,
+                                       species_list_select_elast,
+                                       species_object_mu,
+                                       species_object_mu_elast,
+                                       harv_rules.ref,
+                                       sim_equil,
+                                       sim_equil_elast,
+                                       threshold_pop=200,
+                                       id_forest=sim_invasion_elast.id),
+             pattern=map(sim_invasion_elast.id),
+             iteration="vector",
+             format="file"),
+  
+  ## disturbance
   
   #%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mu matrix sim -
