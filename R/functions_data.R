@@ -907,7 +907,9 @@ make_simulations_equilibrium_elast = function(species.combination,
     filter(var == "n", equil)
   
   equil.file=paste0("rds/", s_p, "/clim_", clim,
-                    "/sim_equilibrium/", species.comb, ".rds")
+                    "/sim_equilibrium/", 
+                    gsub(":","x", species.comb),
+                    ".rds")
   
   # Save simulation in a rdata
   create_dir_if_needed(equil.file)
@@ -1119,14 +1121,14 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
   }else{
     simul_eq.species=match(id_forest,sim_eq_elast)
     sim_equilibrium.in= readRDS(sim_equil_elast[simul_eq.species])$distrib_equil
-    reached_equil=readRDS(sim_equil[id_forest])$reached_equil
+    reached_equil=readRDS(sim_equil_elast[simul_eq.species])$reached_equil
   }
 
   # Only make the simulation if population reached an equilibrium
   if(reached_equil){
     # Loop on all species
     for(i in 1:length(species.in)){
-      if(species.in[i]!=sp){
+      if(species.in[i]==sp){
         id.species.obj=species_list_select_elast[species_list_select_elast$ID.spclim==clim &
                                                    species_list_select_elast$elast==sp &
                                                    species_list_select_elast$species_combination==species.in[i],
@@ -1136,8 +1138,12 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
         # Store the file in the list
         list.species[[i]] = readRDS(species.file.i)
         
+        # Extract the equilibrium for species i
         equil.i = sim_equilibrium.in %>%
-          filter(var == "n", equil, species == s_p) %>% 
+          filter(var == "n", equil, species == s_p) %>%  
+          mutate(value=case_when(size>threshold_pop~0,
+                                 TRUE~value)) |>
+          mutate(BAtot=sum((size/2000)^2*pi*value)) |> 
           pull(value)
         # Initiate the population at equilibrium
         list.species[[i]]$init_pop <- def_init_k(equil.i)
@@ -1156,11 +1162,9 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
         
         # Extract the equilibrium for species i
         equil.i = sim_equilibrium.in %>%
-          filter(var == "n", equil, species == species.in[i]) %>%  
-          mutate(value=case_when(size>threshold_pop~0,
-                                 TRUE~value)) |>
-          mutate(BAtot=sum((size/2000)^2*pi*value)) |> 
+          filter(var == "n", equil, species == species.in[[i]]) %>% 
           pull(value)
+        
         # Initiate the population at equilibrium
         list.species[[i]]$init_pop <- def_init_k(equil.i)
         
@@ -1201,7 +1205,9 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
   }
   
   forest.file=paste0("rds/", s_p, "/clim_", clim,
-                     "/sim_invasion/", species.comb, ".rds")
+                     "/sim_invasion/",
+                     gsub(":","x", species.comb), #because ":" are not supported in filenames
+                     ".rds")
   # Save simulation in a rdata
   create_dir_if_needed(forest.file)
   saveRDS(sim.in, forest.file)
