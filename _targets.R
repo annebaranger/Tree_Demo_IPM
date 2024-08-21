@@ -93,9 +93,9 @@ list(
     type = rep("storm", 3), intensity = rep(0.5, 3), 
     IsSurv = rep(FALSE, 3), t = c(500:502))),
 
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Prepare data for simulations -
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Prepare data for simulations ----
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   #' for each species define climatic combination of sggd/wai
 
   tar_target(climate.cat,
@@ -166,9 +166,9 @@ list(
              create_simulation_equil_list(species.combination.select)),
 
 
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Make mean simulations -
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make mean simulations ----
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   # simulation until equilibrium
   tar_target(sim_equil.id,
@@ -221,9 +221,9 @@ list(
              sim_forest_list$id.simul_forest),
   
   
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  # -- Make sensitivity simulations -
-  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make sensitivity simulations ----
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   # create objects
   
@@ -285,7 +285,22 @@ list(
              format="file"),
   
   ## disturbance
-  
+  tar_target(sim_dist_elast.id,
+             create_simulation_dist_list_elast(sim_forest_list_elast$list.forests,
+                                               species.list.disturbance)),
+  tar_target(sim_disturbance_elast,
+             make_simulations_disturbance(sim_forest_list$list.forests,
+                                          species_list_select_elast,
+                                          species_object_mu_elast,
+                                          species_object_mu,
+                                          harv_rules.ref,
+                                          sim_equil_elast,
+                                          disturb_coef.in,
+                                          disturbance.df_storm,
+                                          fit.list.allspecies,
+                                          id_forest=sim_dist_elast.id),
+             pattern=map(sim_dist_elast.id),
+             iteration="vector"),
   #%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mu matrix sim -
   #%%%%%%%%%%%%%%%%%%%%%%%%

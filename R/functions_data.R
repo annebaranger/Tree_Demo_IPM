@@ -740,6 +740,28 @@ create_simulation_dist_list = function(sim_forest_list,
 }
 
 
+#' Function to make a list of simulations for perturbations
+#' @description
+#' function that checks whether all species present in combinations have disturbance
+#' parameters, if not mark the combination as such 
+#' @param sim_forest_list
+#' @param species.list.disturbance
+create_simulation_dist_list_elast = function(sim_forest_list,
+                                             species.list.disturbance){
+  list.forest=sim_forest_list |> 
+    mutate(s_p=gsub(" ","_",species)) %>% 
+    rowwise() %>% 
+    mutate(species_combination=gsub(elast,
+                                    s_p,
+                                    species_combination),
+           list.sp=strsplit(species_combination,split="[.]")) |> 
+    mutate(is.dist=(sum(sapply(list.sp,function(x)grepl(x,species.list.disturbance)))==length(list.sp)))
+  id.simul_dist=list.forest[list.forest$forest.real&list.forest$is.dist,"simul_eq_elast"][[1]]
+  return(id.simul_dist)
+  
+}
+
+
 
 
 
@@ -1350,6 +1372,7 @@ make_simulations_disturbance_elast = function(sim_forest_list_elast,
                                               sim_equil_elast,
                                               disturb_coef.in,
                                               disturbance.df_storm,
+                                              fit.list.allspecies,
                                               id_forest){
   species.combination=sim_forest_list_elast$list.forests
   sim_eq_elast=sim_forest_list_elast$id.simul_forest
@@ -1373,7 +1396,7 @@ make_simulations_disturbance_elast = function(sim_forest_list_elast,
   if(reached_equil){
     # Loop on all species
     for(i in 1:length(species.in)){
-      if(species.in[i]!=sp){
+      if(species.in[i]==sp){
         id.species.obj=species_list_select_elast[species_list_select_elast$ID.spclim==clim &
                                                    species_list_select_elast$elast==sp &
                                                    species_list_select_elast$species_combination==species.in[i],
@@ -1431,18 +1454,115 @@ make_simulations_disturbance_elast = function(sim_forest_list_elast,
                                 equil_time = 4000, 
                                 disturbance = disturbance.df_storm,
                                 verbose = TRUE)
+      sim.short<-sim.in %>% filter(var%in%c("N","BAsp"))
   } else {
     sim.in = matrix()
   }
   
   forest.file=paste0("rds/", s_p, "/clim_", clim,
-                     "/sim_disturbance/", species.comb, ".rds")
+                     "/sim_disturbance/",
+                     gsub(":","x", species.comb), #because ":" are not supported in filenames
+                     ".rds")
   # Save simulation in a rdata
   create_dir_if_needed(forest.file)
-  saveRDS(sim.in, forest.file)
+  saveRDS(sim.short, forest.file)
   
+  
+  ## Compute resistance indicators
+  out=species.combination |> 
+    filter(simul_eq_elast == id_forest) |> 
+    mutate(resistance = NA_real_, recovery = NA_real_, resilience = NA_real_, 
+           t0 = NA_real_, thalf = NA_real_, SD = NA_real_, BA_diff = NA_real_, 
+           BA_eq = NA_real_, dbh_mean = NA_real_, dbh_q10 = NA_real_, 
+           dbh_q90 = NA_real_, dbh_mean_postdist = NA_real_, 
+           dbh_q10_postdist = NA_real_, dbh_q90_postdist = NA_real_)
+    
+  # Identify disturbance time
+  tdist = min(disturbance.df_storm$t)
+  fit.species.i=fit.list.allspecies[[s_p]]
+      
+  if(!is.na(sim.in[1, 1])){
+    # Read simulation i
+    sim.i = sim.in |> 
+      filter(species==s_p)
+    
+    # mean dbh at equilibrium and after disturbance
+    dbh_i = sim.i %>%
+      filter(var == "n") %>%
+      filter(time %in% c(1, (max(disturbance.df_storm$t)+1))) %>%
+      group_by(size, time) %>%
+      summarize(ntot = sum(value)) %>%
+      ungroup() %>% group_by(time) %>%
+      filter(size > 0) %>%
+      mutate(ntot_size = ntot*size) %>%
+      summarize(mean_dbh = weighted.mean(size, w = ntot), 
+                q10_dbh = weighted.quantile(size, w = ntot, prob = 0.1), 
+                q90_dbh = weighted.quantile(size, w = ntot, prob = 0.9))
+    out$dbh_mean<- subset(dbh_i, time == 1)$mean_dbh
+    out$dbh_q10 <- subset(dbh_i, time == 1)$q10_dbh
+    out$dbh_q90<- subset(dbh_i, time == 1)$q90_dbh
+    out$dbh_mean_postdist <- subset(dbh_i, time != 1)$mean_dbh
+    out$dbh_q10_postdist <- subset(dbh_i, time != 1)$q10_dbh
+    out$dbh_q90_postdist <- subset(dbh_i, time != 1)$q90_dbh
+    
+    # Format the output
+    data.i <- sim.i %>%
+      filter(var == "BAsp") %>%
+      filter(!equil) %>%
+      group_by(time) %>%
+      summarize(BA = sum(value))
+    
+    ## Calculate stability before disturbance (to check equilibrium)
+    out$SD= sd(subset(data.i, time %in% c(1:(tdist-1)))$BA)
+    out$BA_diff = diff(range(subset(data.i, time %in% c(1:(tdist-1)))$BA))
+    
+    ## Calculate resistance
+    #  - Basal area at equilibrium
+    Beq.i = mean((data.i %>% filter(time < min(disturbance.df_storm$t)))$BA)
+    out$BA_eq = Beq.i
+    # - Basal area after disturbance
+    Bdist.i = (data.i %>% filter(time == max(disturbance.df_storm$t)+1))$BA
+    # - Resistance : logit of the percentage of basal area that survived 
+    #out$resistance[i] = Beq.i/(Beq.i - Bdist.i)
+    out$resistance = log((Bdist.i/Beq.i)/(1 - (Bdist.i/Beq.i)))
+    
+    ## Calculate recovery
+    #  - Time at which population recovered fully
+    Rec.time.i = min((data.i %>% 
+                        filter(time > max(disturbance.df_storm$t)) %>%
+                        filter(BA > Beq.i))$time)
+    # - Basal area 20 years after disturbance
+    Bdist20.i = (data.i %>% filter(time == max(disturbance.df_storm$t)+21))$BA
+    # - Recovery = slope of BA increase in teh 20 years after disturbance
+    out$recovery = abs(Bdist20.i - Bdist.i)/20
+    
+    ## Calculate resilience
+    out$resilience <- 1/sum((data.i %>%
+                                  mutate(BA0 = .[which(.$time == 1), "BA"]) %>%
+                                  mutate(diff = abs(BA - BA0)))$diff)
+    
+    ## Calculate t0
+    #  - Time at which population recovered to 5% of the basal area lost
+    Rec.0.time.i = min((data.i %>% 
+                          filter(time > max(disturbance.df_storm$t)) %>%
+                          filter(BA > (Beq.i + 19*Bdist.i)/20))$time)
+    # - Recovery = time to recover minus time of disturbance
+    out$t0 = Rec.0.time.i - max(disturbance.df_storm$t)
+    
+    ## Calculate thalf
+    #  - Time at which population recovered to 50% of the basal area lost
+    Rec.half.time.i = min((data.i %>% 
+                             filter(time > max(disturbance.df_storm$t)) %>%
+                             filter(BA > (Beq.i + Bdist.i)/2))$time)
+    # - Recovery = time to recover minus time of disturbance
+    out$thalf = Rec.half.time.i - max(disturbance.df_storm$t)
+    
+    
+  }
+      
   # Return output list
-  return(forest.file)
+  return(list(forest.file=forest.file,
+              out=out))
 }
 
 #' Function to make a list of simulations with ibm
