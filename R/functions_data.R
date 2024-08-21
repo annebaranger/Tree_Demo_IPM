@@ -1022,11 +1022,11 @@ make_simulations_invasion = function(species.combination,
     # Run simulation till equilibrium
     if(sim.type=="mu"){
       sim.in = sim_deter_forest(forest.in, 
-                                tlim = 1500,
+                                tlim = 1000,
                                 climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
                                                                         "waib", "wai2", "sgdd2", 
                                                                         "PC1", "PC2", "N", "SDM")],
-                                equil_time = 1500, 
+                                equil_time = 1000, 
                                 equil_dist = 50, 
                                 equil_diff = 0.5, 
                                 harvest = "default", 
@@ -1034,19 +1034,18 @@ make_simulations_invasion = function(species.combination,
                                 verbose = TRUE)
     }else{
       sim.in = sim_deter_forest(forest.in, 
-                                tlim = 1500,
-                                equil_time = 1500, 
+                                tlim = 1000,
+                                equil_time = 1000, 
                                 equil_dist = 50, 
                                 equil_diff = 0.5, 
                                 harvest = "default", 
                                 SurfEch = 0.03,
                                 verbose = TRUE)
     }
-
+    sim.in<-sim.in |> filter(var%in%c("N","BAsp"))
   } else {
     sim.in = matrix()
   }
-  
   forest.file=paste0("rds/", s_p, "/clim_", clim,
                      "/sim_invasion/", species.comb, ".rds")
   # Save simulation in a rdata
@@ -1179,11 +1178,11 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
     # Run simulation till equilibrium
     if(sim.type=="mu"){
       sim.in = sim_deter_forest(forest.in, 
-                                tlim = 1500,
+                                tlim = 1000,
                                 climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
                                                                         "waib", "wai2", "sgdd2", 
                                                                         "PC1", "PC2", "N", "SDM")],
-                                equil_time = 1500, 
+                                equil_time = 1000, 
                                 equil_dist = 50, 
                                 equil_diff = 0.5, 
                                 harvest = "default", 
@@ -1191,19 +1190,18 @@ make_simulations_invasion_elast = function(sim_forest_list_elast,
                                 verbose = TRUE)
     }else{
       sim.in = sim_deter_forest(forest.in, 
-                                tlim = 1500,
-                                equil_time = 1500, 
+                                tlim = 1000,
+                                equil_time = 1000, 
                                 equil_dist = 50, 
                                 equil_diff = 0.5, 
                                 harvest = "default", 
                                 SurfEch = 0.03,
                                 verbose = TRUE)
     }
-    
+    sim.in<-sim.in |> filter(var%in%c("N","BAsp"))
   } else {
     sim.in = matrix()
   }
-  
   forest.file=paste0("rds/", s_p, "/clim_", clim,
                      "/sim_invasion/",
                      gsub(":","x", species.comb), #because ":" are not supported in filenames
@@ -1641,7 +1639,7 @@ get_invasion_rate<-function(species.combination,
                der2=(der-lag(der))/(time-lag(time)))
       
       first.extr<-derivative.i |>  
-        filter(time<1500) |> 
+        filter(time<1000) |> 
         mutate(sign_eq=(sign(der2)==sign(lag(der2)))) |> 
         filter(sign_eq==FALSE) |> slice(1) |> 
         dplyr::select(time) |> pull(time)
