@@ -289,7 +289,7 @@ list(
              create_simulation_dist_list_elast(sim_forest_list_elast$list.forests,
                                                species.list.disturbance)),
   tar_target(sim_disturbance_elast,
-             make_simulations_disturbance(sim_forest_list$list.forests,
+             make_simulations_disturbance_elast(sim_forest_list_elast,
                                           species_list_select_elast,
                                           species_object_mu_elast,
                                           species_object_mu,
