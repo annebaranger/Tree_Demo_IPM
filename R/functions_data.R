@@ -1046,6 +1046,7 @@ make_simulations_invasion = function(species.combination,
   } else {
     sim.in = matrix()
   }
+
   forest.file=paste0("rds/", s_p, "/clim_", clim,
                      "/sim_invasion/", species.comb, ".rds")
   # Save simulation in a rdata

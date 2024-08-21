@@ -178,4 +178,3 @@ dist_test.lm=dist_test |> group_by(species_combination) |> mutate(n=n()) |> filt
 summary(lm(resilience~ncomb+ncomb:species_combination+wai+sgdd,data=dist_test.lm))
 anova(lm(resilience~ncomb+ncomb:species_combination+wai+sgdd,data=dist_test.lm))
 car::Anova(lm(resilience~ncomb+ncomb:species_combination+wai+sgdd,data=dist_test.lm))
-

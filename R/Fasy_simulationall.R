@@ -130,3 +130,4 @@ dim(species.combination.list)[1]
 
 # time required for simulation with mu matrix
 dim(species.combination.list)[1]*150*3+180
+

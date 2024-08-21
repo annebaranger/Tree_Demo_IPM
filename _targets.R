@@ -31,7 +31,7 @@ for(i in 1:length(packages.in)) if(!(packages.in[i] %in% rownames(installed.pack
 options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")
 tar_option_set(packages = packages.in,
                memory = "transient")
-future::plan(future::multisession, workers = 6)
+future::plan(future::multisession, workers = 60)
 set.seed(2)
 
 
@@ -300,9 +300,9 @@ list(
   #            iteration="vector",
   #            format="file"),
 
-  #%%%%%%%%%%%%%%%%%%%
-  # -- Make analysis -
-  #%%%%%%%%%%%%%%%%%%%
+  #%%%%%%%%%%%%%%%%%%%%%%
+  # -- Make analysis ----
+  #%%%%%%%%%%%%%%%%%%%%%%
   
   #' 1. Compute invasion rate
   tar_target(invasion_metric,
