@@ -25,3 +25,4 @@ rbind(list.forests,list.forests.bis) |> unique() |>
   mutate(forest.real=grepl(gsub(" ","_",species),species_combination)) |> 
   arrange(species,ID.spclim) |> 
   View()
+
