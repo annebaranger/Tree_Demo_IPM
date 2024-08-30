@@ -283,7 +283,11 @@ list(
              pattern=map(sim_invasion_elast.id),
              iteration="vector",
              format="file"),
-  
+  tar_target(invasion_metric_elast,
+             get_invasion_rate(species.combination=sim_forest_list_elast$list.forests,
+                               id.simul_forest=sim_invasion_elast.id,
+                               sim_invasion=sim_invasion_elast,
+                               fit.list.allspecies=fit.list.allspecies)),
   ## disturbance
   tar_target(sim_dist_elast.id,
              create_simulation_dist_list_elast(sim_forest_list_elast$list.forests,
@@ -301,6 +305,11 @@ list(
                                           id_forest=sim_dist_elast.id),
              pattern=map(sim_dist_elast.id),
              iteration="vector"),
+  tar_target(disturbance_metric_elast,
+             bind_rows(sim_disturbance_elast[grep( pattern = "_out", 
+                                                   x = names(sim_disturbance_elast))])),
+  
+  
   #%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mu matrix sim -
   #%%%%%%%%%%%%%%%%%%%%%%%%
