@@ -12,20 +12,28 @@ species.combination.select<- tar_read(species.combination.select) %>%
   select(species,species_combination,n_species,clim_id,wai,sgdd,clim_up,clim_low) %>% 
   left_join(mean_pca,by=c("species","clim_id"))
 
+# get invasion metrics
+invasion_metric_elast<-tar_read(invasion_metric_elast) %>% 
+  select(species,elast,species_combination,clim_id,inv_mean,inv_max,inv_50) %>% 
+  rowwise() %>% 
+  mutate(species_combination=gsub(pattern=elast,
+                                  replacement=gsub(" ","_",species),
+                                  x=species_combination),
+         vr=str_split(elast,pattern="-",simplify = T)[2]) %>% 
+  ungroup()
 
-species.combination.select %>% 
-  filter(species%in%c("Abies alba","Fagus sylvatica")) %>% 
-  ggplot(aes(wai,sgdd,color=clim_id))+
-  geom_point()+
-  facet_wrap(~species)
+
 # get disturbance metrics from mean 
 disturbance_metric<-tar_read(disturbance_metric) %>% 
-  mutate(elast="Abies_alba-amean",vr="mean")
-
+  mutate(elast="Abies_alba-amean",vr="mean") %>%
+  select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery)
+invasion_metric<-tar_read(invasion_metric) %>% 
+  mutate(elast="Abies_alba-amean",vr="mean") %>%
+  select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50) 
 # get disturbance metrics from elasticity analysis
-tar_load(sim_disturbance_elast)
-disturbance_metric_elast<-bind_rows(sim_disturbance_elast[grep( pattern = "_out", x = names(sim_disturbance_elast))]) %>% 
-  select(-simul_eq_elast) %>% 
+tar_load(disturbance_metric_elast)
+disturbance_metric_elast<-disturbance_metric_elast %>%
+  select(species,elast,species_combination,clim_id,resilience,resistance,recovery) %>% 
   rowwise() %>% 
   mutate(species_combination=gsub(pattern=elast,
                                   replacement=gsub(" ","_",species),
@@ -37,8 +45,14 @@ disturbance_metric_elast<-bind_rows(sim_disturbance_elast[grep( pattern = "_out"
 # compute mean elasticity per vital rates, for each species combi/clim
 disturbance <- bind_rows(disturbance_metric,
                          disturbance_metric_elast) %>% 
-  arrange(species,clim_id,species_combination,elast) %>% 
-  pivot_longer(cols=c("resilience","recovery","resistance"),
+  arrange(species,clim_id,species_combination,elast) 
+invasion <- bind_rows(invasion_metric,
+                      invasion_metric_elast) %>% ungroup() %>% 
+  arrange(species,species_combination,clim_id) 
+performance<- invasion %>% 
+  left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
+  arrange(species,clim_id,species_combination,elast,vr) %>% 
+  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50"),
                names_to="metric",
                values_to="metric_val") %>% 
   group_by(species,clim_id,species_combination,metric) %>% 
@@ -48,11 +62,12 @@ disturbance <- bind_rows(disturbance_metric,
   group_by(species,clim_id,species_combination,metric,vr) %>% 
   summarise(elast_mean=mean(dmetric,na.rm=TRUE),
             elast_sd=sd(dmetric,na.rm=TRUE)) %>% 
-  ungroup()
+  ungroup() %>% 
+  filter(metric%in%c("resilience","recovery","resistance","inv_50"))
 
 
 # plots
-disturbance %>% 
+performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
   filter(species=="Abies alba") %>% 
   # filter(clim_id!=10) %>% 

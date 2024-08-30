@@ -1786,6 +1786,70 @@ get_invasion_rate<-function(species.combination,
   return(out)
 }
 
+
+#' Function to compute invasion rate for a simulation
+#' @param species.combination table with all species combi for each climate cat
+#' @param sim_invasion table with all species fit info 
+#' @param id_forest id of the forest to simulate
+#' @param fit.list.allspecies list of species with ipm objects, here to get the delay
+get_invasion_rate_elast<-function(species.combination,
+                                  id.simul_forest,
+                                  sim_invasion,
+                                  fit.list.allspecies){
+  out=species.combination |> 
+    filter(simul_eq_elast %in% id.simul_forest) |> 
+    mutate(inv_mean=NA_real_,
+           inv_max=NA_real_,
+           inv_50=NA_real_)
+  for (i in 1:length(sim_invasion)){
+    # Printer
+    print(paste0("Reading simulation ", i, "/", length(sim_invasion)))
+    
+    
+    # Read simulation i
+    sim.i = readRDS(sim_invasion[i])
+    
+    if(dim(sim.i)[1]>1){ # check simulation was performed (i.e. equil was reached)
+      # get simulation index
+      id.sim.i=id.simul_forest[i]
+      species.i=species.combination[id.sim.i,"species"][[1]]
+      s_p.i=gsub(" ","_",species.i)
+      fit.species.i=fit.list.allspecies[[s_p.i]]
+      delay.i=as.numeric(fit.species.i$info[["delay"]])
+      
+      derivative.i <- sim.i |> 
+        filter(species==s_p.i,var=="BAsp",time>delay.i) |> 
+        mutate(der=(value-lag(value))/(time-lag(time)),
+               der2=(der-lag(der))/(time-lag(time)))
+      
+      first.extr<-derivative.i |>  
+        filter(time<1000) |> 
+        mutate(sign_eq=(sign(der2)==sign(lag(der2)))) |> 
+        filter(sign_eq==FALSE) |> slice(1) |> 
+        dplyr::select(time) |> pull(time)
+      
+      first.extr=ifelse(length(first.extr)==0,50,first.extr)
+      
+      inv.1<-derivative.i |> 
+        filter(time<(first.extr-5)) |> 
+        summarise(inv_mean=mean(der,na.rm=TRUE),
+                  inv_max=max(der,na.rm=TRUE))
+      
+      inv.2<-derivative.i |> 
+        filter(time<delay.i+50) |> 
+        summarise(inv_50=mean(der,na.rm=TRUE))
+      out[out$simul_eq_elast==id.sim.i,c("inv_mean","inv_max","inv_50")]=
+        list(inv.1$inv_mean[[1]],
+             inv.1$inv_max[[1]],
+             inv.2$inv_50[[1]])
+    }
+    
+  }
+  
+  return(out)
+}
+
+
 #' Function to compute invasion rate for a simulation
 #' @param species.combination table with all species combi for each climate cat
 #' @param sim_disturbance table with all species fit info 
