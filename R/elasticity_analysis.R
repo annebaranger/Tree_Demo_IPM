@@ -86,12 +86,13 @@ elasticity %>%
 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(species=="Fagus sylvatica") %>%
-  group_by(clim_id,pca1,elast,n_species,metric) %>% 
-  summarise(metric_val=mean(metric_val)) %>% 
-  ggplot(aes(pca1,metric_val,color=elast)) +
-  geom_line()+
-  theme(legend.position = "none")+
+  filter(species=="Abies alba") %>%
+  mutate(elast_combi=as.factor(paste0(elast,species_combination))) %>% 
+  # group_by(clim_id,pca1,elast,n_species,metric) %>% 
+  # summarise(metric_val=mean(metric_val)) %>% 
+  ggplot() +
+  geom_line(aes(pca1,metric_val,color=species_combination, group=interaction(elast,species_combination)))+
+  # theme(legend.position = "none")+
   facet_grid(metric~n_species,scales="free_y")
   
 ## add traits of competitors
