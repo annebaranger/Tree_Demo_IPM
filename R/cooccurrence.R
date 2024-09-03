@@ -54,3 +54,14 @@ for (sp in species.list.ipm){
                mutate(species=sp))
   
 }
+
+
+out %>% 
+  filter(partner%in%species.list.ipm) %>% 
+  filter(full==1&is.na(coocc)) %>% 
+  group_by(species,clim_id) %>%
+  summarise(n=n()) %>% 
+  ggplot(aes(clim_id,n))+
+  geom_col()+
+  facet_wrap(~species)
+  
