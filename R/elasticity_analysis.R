@@ -87,12 +87,22 @@ elasticity %>%
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
   filter(species=="Abies alba") %>%
+  filter(!metric%in%c("inv_max","inv_mean")) %>% 
   mutate(elast_combi=as.factor(paste0(elast,species_combination))) %>% 
   # group_by(clim_id,pca1,elast,n_species,metric) %>% 
   # summarise(metric_val=mean(metric_val)) %>% 
   ggplot() +
   geom_line(aes(pca1,metric_val,color=species_combination, group=interaction(elast,species_combination)))+
+  guides(colour = guide_legend(override.aes = list(linewidth = 2.5)))+
   # theme(legend.position = "none")+
-  facet_grid(metric~n_species,scales="free_y")
+  facet_wrap(~metric,scales="free_y")
   
 ## add traits of competitors
+
+#open simul of abal.piab.pisy & abal.piab for the same climate
+app<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
+ap<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.rds")
+
+ap %>% filter(var=="BAsp") %>% 
+  ggplot(aes(time,value,color=species))+
+  geom_line()
