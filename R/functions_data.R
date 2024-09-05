@@ -1967,6 +1967,87 @@ get_resilience_metrics<-function(species.combination,
   return(out)
 }
 
+
+#' Function to compute initial basal area of simulation
+#' @description
+#' The function takes in argument the list of forest to simulate until equilibrium,
+#' and the index of true forests. The latter corresponds to forests
+#' 
+get_bainit<-function(sim_forest_list_elast,
+         sim_equil_elast,
+         species.list.ipm){
+  forest.list=sim_forest_list_elast$list.forests[sim_forest_list_elast$id.simul_forest,] 
+  forest.list[species.list.ipm]<-NA
+  for(i in 1:length(sim_equil_elast)){
+    file=sim_equil_elast[i]
+    print(file)
+    equil=readRDS(file)
+    if(equil$reached_equil){
+      sp=strsplit(file,"/")[[1]][2]
+      ba_equil=equil$distrib_equil %>% 
+        mutate(basp=pi*(size/(2000))^2) %>% 
+        group_by(species) %>% 
+        summarise(BAtot=sum(basp*value))
+      for(ssp in ba_equil$species){
+        forest.list[i,ssp]<-ba_equil[ba_equil$species==ssp,"BAtot"]
+      }
+    }
+  }
+}
+
+
+
+get_bainit_inv<-function(sim_forest_list_elast,
+                         sim_equil,
+                         invasion_metric_elast,
+                         elast=TRUE,
+                         species.list.ipm){
+  forest.list=sim_forest_list_elast$list.forests
+  invasion_metric_elast[species.list.ipm]<-NA
+  
+  for(id_forest in 1:dim(invasion_metric_elast)[1]){
+    sp=invasion_metric_elast[id_forest,ifelse(elast,"elast","species")][[1]]
+    s_p=gsub(" ","_",sp)
+    clim=invasion_metric_elast[id_forest,"ID.spclim"][[1]]
+    species.comb=invasion_metric_elast[id_forest,"species_combination"][[1]]
+    if(length(strsplit(species.comb,"\\.")[[1]])>1){
+      partner.comb=if_else(sub(paste0(s_p,"\\."),"",species.comb)==species.comb,
+                           if_else(sub(paste0("\\.",s_p),"",species.comb)==species.comb,
+                                   "Problem",
+                                   sub(paste0("\\.",s_p),"",species.comb)),
+                           sub(paste0(s_p,"\\."),"",species.comb))
+      if(elast){
+        simul_eq.partner=forest.list |> 
+          filter(elast==sp &
+                   species_combination==partner.comb &
+                   ID.spclim == clim) |> 
+          pull(simul_eq)
+      }else{
+        simul_eq.partner=forest.list |> 
+          filter(species==sp &
+                   species_combination==partner.comb &
+                   ID.spclim == clim) |> 
+          pull(simul_eq)
+      }
+      file=sim_equil[simul_eq.partner]
+      equil=readRDS(file)
+      if(equil$reached_equil){
+        sp=invasion_metric_elast[id_forest,"species"][[1]]
+        ba_equil=equil$distrib_equil %>% 
+          mutate(basp=pi*(size/(2000))^2) %>% 
+          group_by(species) %>% 
+          summarise(BAtot=sum(basp*value))
+        for(ssp in ba_equil$species){
+          invasion_metric_elast[id_forest,ssp]<-ba_equil[ba_equil$species==ssp,"BAtot"]
+        }
+      }
+    }
+  }
+  return(invasion_metric_elast)
+}
+
+
+
 #' Function to extract parameter of vital rates
 #' @param species.combination table with all species combi for each climate cat
 #' @param sim_disturbance table with all species fit info 

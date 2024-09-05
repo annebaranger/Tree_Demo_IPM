@@ -327,7 +327,7 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%
   # -- Make analysis ----
   #%%%%%%%%%%%%%%%%%%%%%%
-  
+
   #' 1. Compute invasion rate
   tar_target(invasion_metric,
              get_invasion_rate(species.combination=sim_forest_list$list.forests,
@@ -341,6 +341,20 @@ list(
                                     sim_disturbance,
                                     fit.list.allspecies,
                                     disturbance.df_storm)),
+  
+  #' 3. Get BA initial
+  tar_target(invasion_ba,
+             get_bainit_inv(sim_forest_list,
+                           sim_equil,
+                           invasion_metric,
+                           elast=FALSE,
+                           species.list.ipm)),
+  tar_target(invasion_ba_elast,
+             get_bainit_inv(sim_forest_list_elast,
+                           sim_equil,
+                           invasion_metric_elast,
+                           elast=FALSE,
+                           species.list.ipm)),
   
   #' 2. extract parameters of each climatic conditions (earlier?)
   
