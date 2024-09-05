@@ -1973,30 +1973,61 @@ get_resilience_metrics<-function(species.combination,
 #' The function takes in argument the list of forest to simulate until equilibrium,
 #' and the index of true forests. The latter corresponds to forests
 #' 
-get_bainit<-function(sim_forest_list_elast,
-         sim_equil_elast,
-         species.list.ipm){
-  forest.list=sim_forest_list_elast$list.forests[sim_forest_list_elast$id.simul_forest,] 
-  forest.list[species.list.ipm]<-NA
-  for(i in 1:length(sim_equil_elast)){
-    file=sim_equil_elast[i]
-    print(file)
-    equil=readRDS(file)
-    if(equil$reached_equil){
-      sp=strsplit(file,"/")[[1]][2]
-      ba_equil=equil$distrib_equil %>% 
-        mutate(basp=pi*(size/(2000))^2) %>% 
-        group_by(species) %>% 
-        summarise(BAtot=sum(basp*value))
-      for(ssp in ba_equil$species){
-        forest.list[i,ssp]<-ba_equil[ba_equil$species==ssp,"BAtot"]
+get_bainit_dist<-function(sim_forest_list,
+                          sim_equil,
+                          disturbance_metric,
+                          elast=TRUE,
+                          species.list.ipm){
+  forest.list=sim_forest_list$list.forests
+  disturbance_metric[species.list.ipm]<-NA
+  
+  for(id_forest in 1:dim(disturbance_metric)[1]){
+    sp=disturbance_metric[id_forest,ifelse(elast,"elast","species")][[1]]
+    s_p=gsub(" ","_",sp)
+    clim=disturbance_metric[id_forest,"ID.spclim"][[1]]
+    species.comb=disturbance_metric[id_forest,"species_combination"][[1]]
+    if(elast){
+      id_simu=forest.list |>
+        filter(elast==sp &
+                 species_combination==species.comb &
+                 ID.spclim == clim) |> 
+          pull(simul_eq_elast)
+      simul_eq.partner=match(id_simu,sim_forest_list$id.simul_forest)
+      
+        }else{
+        simul_eq.partner=forest.list |> 
+          filter(species==sp &
+                   species_combination==species.comb &
+                   ID.spclim == clim) |> 
+          pull(simul_eq)
       }
-    }
+      file=sim_equil[simul_eq.partner]
+      equil=readRDS(file)
+      if(equil$reached_equil){
+        sp=disturbance_metric[id_forest,"species"][[1]]
+        ba_equil=equil$distrib_equil %>% 
+          mutate(basp=pi*(size/(2000))^2) %>% 
+          group_by(species) %>% 
+          summarise(BAtot=sum(basp*value))
+        for(ssp in ba_equil$species){
+          disturbance_metric[id_forest,ssp]<-ba_equil[ba_equil$species==ssp,"BAtot"]
+        }
+      }
   }
+  return(disturbance_metric)
+
 }
 
 
-
+#' Function to compute initial basal area of simulation for invasion rate
+#' @description
+#' The function takes in argument the list of forest to simulate until equilibrium,
+#' and the index of true forests. The latter corresponds to forests
+#' @param sim_forest_list_elast list of forests to simulate
+#' @param sim_equil list of sim file until equilibrium
+#' @param invasion_metric_elast table with invasion metrics
+#' @param elast TRUE/FALSE whether it concerns elasticity analysis or not
+#' @param species.list.ipm list of species with models
 get_bainit_inv<-function(sim_forest_list_elast,
                          sim_equil,
                          invasion_metric_elast,

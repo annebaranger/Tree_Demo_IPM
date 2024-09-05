@@ -353,8 +353,21 @@ list(
              get_bainit_inv(sim_forest_list_elast,
                            sim_equil,
                            invasion_metric_elast,
-                           elast=FALSE,
+                           elast=TRUE,
                            species.list.ipm)),
+  tar_target(disturbance_ba,
+             get_bainit_dist(sim_forest_list,
+                             sim_equil,
+                             disturbance_metric,
+                             elast=FALSE,
+                             species.list.ipm)),
+  tar_target(disturbance_ba_elast,
+             get_bainit_dist(sim_forest_list_elast,
+                             sim_equil_elast,
+                             disturbance_metric_elast,
+                             elast=TRUE,
+                             species.list.ipm)),
+  
   
   #' 2. extract parameters of each climatic conditions (earlier?)
   
