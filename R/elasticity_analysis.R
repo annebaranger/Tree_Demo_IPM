@@ -3,6 +3,7 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 library(ggplot2)
+library(viridis)
 # get basic data
 tar_load(species.list.ipm)
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
@@ -114,7 +115,9 @@ elasticity %>%
   filter(ba_partner_mean<100) %>% 
   # filter(clim_id!=10) %>% 
   ggplot(aes(pca1,elast_mean,color=ba_partner_mean,group=species_combination))+
-  geom_line()+
+  geom_point()+
+  geom_smooth(aes(pca1,elast_mean,color=ba_partner_mean,group=species_combination),
+              method="gam")+
   # geom_smooth(aes(group=species_combination))+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   # ylim(c(-0.4,0.4))+
@@ -142,7 +145,9 @@ performance %>%
 #open simul of abal.piab.pisy & abal.piab for the same climate
 app<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
 ap<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.rds")
+readRDS("rds/Fagus_sylvatica/clim_5/sim_disturbance/Fagus_sylvatica.rds")->sim
 
-ap %>% filter(var=="BAsp") %>% 
+sim %>% filter(var=="BAsp",species!="Picea_abies") %>% 
   ggplot(aes(time,value,color=species))+
-  geom_line()
+  geom_line()+xlim(c(490,503))
+sim %>% filter(var=="H",time==500)
