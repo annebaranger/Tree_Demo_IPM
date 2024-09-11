@@ -35,3 +35,11 @@ fviz_pca_ind(pca)
 fviz_pca_ind(pca,axes=c(2,3))
 fviz_pca_var(pca,col.var="contrib")
 fviz_pca_var(pca,axes=c(2,3),col.var="contrib")
+
+tar_load(species.list.ipm)
+traits<-tar_read(traits) %>% filter(species%in% species.list.ipm) %>% 
+  left_join(list_pars_sp[,c("species","rec_intercept")])
+  
+pca<-prcomp(traits[,2:5],center=TRUE,scale=TRUE)
+library(factoextra)
+fviz_pca_var(pca)
