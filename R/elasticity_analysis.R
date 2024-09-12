@@ -140,6 +140,32 @@ performance %>%
   # guides(guide_legend(override.aes = list(linewidth = 2.5)))+
   # theme(legend.position = "none")+
   facet_wrap(species~metric,scales="free_y",ncol=4)
+
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(vr=="mean") %>% 
+  # filter(species=="Abies alba") %>% 
+  filter(metric=="resistance")->data.test
+summary(lm(metric_val~species*pca1*ba_partner,data=data.test))
+
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(species=="Fagus sylvatica") %>%
+  filter(!metric%in%c("inv_max","inv_mean")) %>% 
+  filter(vr=="mean") %>% 
+  filter(!grepl("Acer_pseudoplatanus",species_combination)) %>% 
+  mutate(elast_combi=as.factor(paste0(elast,species_combination))) %>% 
+  group_by(metric) %>% 
+  mutate(metric_val=scale(metric_val,scale = TRUE)) %>% 
+  ggplot() +
+  geom_point(aes(pca1,metric_val,color=metric))+
+  geom_smooth(aes(pca1,metric_val,color=metric),se = FALSE)+
+  geom_hline(yintercept = 0)+
+  # scale_color_gradientn(colours = viridis(15),trans="log")+
+  # guides(guide_legend(override.aes = list(linewidth = 2.5)))+
+  # theme(legend.position = "none")+
+  facet_wrap(~species_combination,ncol=4)
+
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
   # filter(species=="Abies alba") %>%
