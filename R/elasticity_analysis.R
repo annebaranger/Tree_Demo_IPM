@@ -134,12 +134,26 @@ performance %>%
   # group_by(clim_id,pca1,elast,n_species,metric) %>% 
   # summarise(metric_val=mean(metric_val)) %>% 
   ggplot() +
-  geom_line(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)))+
+  geom_line(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),linewidth=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   # guides(guide_legend(override.aes = list(linewidth = 2.5)))+
   # theme(legend.position = "none")+
   facet_wrap(species~metric,scales="free_y",ncol=4)
+
+# just look how basal area changes on a single simul
+# performance %>% 
+#   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+#   # filter(species=="Abies alba") %>%
+#   filter(!metric%in%c("inv_max","inv_mean")) %>% 
+#   filter(vr=="mean") %>% 
+#   filter(species_combination=="Abies_alba.Picea_abies") %>% 
+#   ggplot() +
+#   geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)))+
+#   geom_line(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),linewidth=1)+
+#   geom_hline(yintercept = 0)+
+#   scale_color_gradientn(colours = viridis(15),trans="log")+
+#   facet_wrap(species~metric,scales="free_y",ncol=4)
 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
