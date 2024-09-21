@@ -45,7 +45,7 @@ fun_sp %>% ggplot(aes(pca1))+
   scale_color_gradientn(colors=turbo(11, direction = -1) )+
   theme_bw( )+
   theme(panel.grid=element_blank(),legend.position = "none")+
-  labs(y="Density",x="PCA first axis", title="Fagus sylvatica")
+  labs(y="Density",x="PCA first axis", title="Abies alba")
 
 
 # ex simulation equilibrium
@@ -56,7 +56,7 @@ species_object=tar_read(species_object_mu)
 tar_load(harv_rules.ref)
 sim.type="mu"
 tar_load(sim_equil.id)
-id_forest=225
+id_forest=96
 
 sp=species.combination[id_forest,"species"][[1]]
 s_p=gsub(" ","_",sp)
@@ -93,7 +93,8 @@ sim.in = sim_deter_forest(forest.in,
                             harvest = "default", 
                             SurfEch = 0.03,
                             verbose = TRUE)
-sim.inv %>% filter(var=="BAsp") %>% 
+sim.in %>% filter(var=="BAsp") %>% 
+  filter(species=="Abies_alba") %>% 
   ggplot(aes(time,value,color=species))+
   geom_line()+
   theme_bw( )+
@@ -103,11 +104,62 @@ sim.inv %>% filter(var=="BAsp") %>%
 
 sim.in %>%
   filter(var == "n", equil) %>% 
-  ggplot(aes(value))+geom_density()+
+  filter(size!=0) %>% 
+  ggplot(aes(size,value,fill=species,color=species))+geom_col( )+
   theme_bw( )+
   theme(panel.grid=element_blank())+
+  facet_wrap(~species,ncol=3)+
   labs(y="Density",x="Size", title="Size distribution at equilibrium")
 
 
 # sim invasion
-sim.inv=readRDS("rds/Fagus_sylvatica/clim_6/sim_invasion/Fagus_sylvatica.Quercus_petraea.rds")
+list.species.inv=list.species[c("Picea_abies","Pinus_sylvestris")]
+forest.inv = new_forest(species = list.species.inv, harv_rules = harv_rules.ref)
+sim.inv.void = sim_deter_forest(forest.inv, 
+                          tlim = 4000,
+                          climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                  "waib", "wai2", "sgdd2", 
+                                                                  "PC1", "PC2", "N", "SDM")],
+                          equil_time = 50000, 
+                          equil_dist = 2000, 
+                          equil_diff = 0.5, 
+                          harvest = "default", 
+                          SurfEch = 0.03,
+                          verbose = TRUE)
+sim.inv.void %>% filter(var=="BAsp") %>% 
+  ggplot(aes(time,value,color=species))+
+  geom_line()+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  scale_color_manual(values=c("green4","cornflowerblue"))+
+  labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
+
+
+sim.inv.void %>%
+  filter(var == "n", equil) %>% 
+  filter(size!=0) %>% 
+  ggplot(aes(size,value,fill=species,color=species))+geom_col( )+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  scale_color_manual(values=c("green4","cornflowerblue"))+
+  scale_fill_manual(values=c("green4","cornflowerblue"))+
+  facet_wrap(~species,ncol=2)+
+  labs(y="Density",x="Size", title="Size distribution at equilibrium")
+
+sim.inv=readRDS("rds/Abies_alba/clim_6/sim_invasion/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
+sim.inv %>% filter(var=="BAsp") %>% 
+  ggplot(aes(time,value,color=species))+
+  geom_line()+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
+
+# sim disturbance
+sim.dist=readRDS("rds/Abies_alba/clim_6/sim_disturbance/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
+sim.dist %>% filter(var=="BAsp") %>% 
+  filter(species=="Abies_alba") %>% 
+  ggplot(aes(time,value,color=species))+
+  geom_line()+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
