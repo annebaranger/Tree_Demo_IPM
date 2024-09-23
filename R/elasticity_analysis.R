@@ -179,6 +179,9 @@ performance %>%
        y="Performance",
        color="Total basal area of competitors")
 
+# explore effect variation of competition with cliamte
+
+
 # show elasticity
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
