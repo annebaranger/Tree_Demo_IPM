@@ -92,12 +92,12 @@ list(
   tar_target(disturbance.df_storm, data.frame(
     type = rep("storm", 3), intensity = rep(0.5, 3), 
     IsSurv = rep(FALSE, 3), t = c(500:502))),
-
+  
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare data for simulations ----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   #' for each species define climatic combination of sggd/wai
-
+  
   tar_target(climate.cat,
              make_climate_cat_pca(FUNDIV_data,
                                   species.list.ipm,
@@ -114,15 +114,15 @@ list(
                                        nsp_per_richness=10,
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
- 
+  
   
   # create a list of all species to be computed
   tar_target(species_list,
              make_species_list(species.combination)),
-
+  
   # subselect species and climate to fit
   tar_target(species.select,
-             c("Abies alba","Fagus sylvatica")),# gsub("_"," ",species.list.ipm)),
+             gsub("_"," ",species.list.ipm)),
   tar_target(clim.select,
              1:10), 
   tar_target(species_list.select,
@@ -144,7 +144,7 @@ list(
   #              pull(id.species.obj)),#species_list$id.species.obj),
   tar_target(species.obj.mu.id,
              seq_along(species_list.mu.select)),
-
+  
   # create species object, run in parallel (bottleneck step)
   # tar_target(species_object,
   #            make_species_rds(fit.list.allspecies,
@@ -160,12 +160,12 @@ list(
              pattern=map(species.obj.mu.id),
              iteration="vector",
              format="file"),
-
+  
   # create forest id 
   tar_target(sim_forest_list,
              create_simulation_equil_list(species.combination.select)),
-
-
+  
+  
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Make mean simulations ----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -183,7 +183,7 @@ list(
              pattern=map(sim_equil.id),
              iteration="vector",
              format="file"),
-
+  
   # simulation for invasion
   tar_target(sim_invasion.id,
              sim_forest_list$id.simul_forest),
@@ -294,15 +294,15 @@ list(
                                                species.list.disturbance)),
   tar_target(sim_disturbance_elast,
              make_simulations_disturbance_elast(sim_forest_list_elast,
-                                          species_list_select_elast,
-                                          species_object_mu_elast,
-                                          species_object_mu,
-                                          harv_rules.ref,
-                                          sim_equil_elast,
-                                          disturb_coef.in,
-                                          disturbance.df_storm,
-                                          fit.list.allspecies,
-                                          id_forest=sim_dist_elast.id),
+                                                species_list_select_elast,
+                                                species_object_mu_elast,
+                                                species_object_mu,
+                                                harv_rules.ref,
+                                                sim_equil_elast,
+                                                disturb_coef.in,
+                                                disturbance.df_storm,
+                                                fit.list.allspecies,
+                                                id_forest=sim_dist_elast.id),
              pattern=map(sim_dist_elast.id),
              iteration="vector"),
   tar_target(disturbance_metric_elast,
@@ -323,19 +323,19 @@ list(
   #            pattern=map(sp_id),
   #            iteration="vector",
   #            format="file"),
-
+  
   #%%%%%%%%%%%%%%%%%%%%%%
   # -- Make analysis ----
   #%%%%%%%%%%%%%%%%%%%%%%
-
+  
   #' 1. Compute invasion rate
   tar_target(invasion_metric,
              get_invasion_rate(species.combination=sim_forest_list$list.forests,
-                              id.simul_forest=sim_forest_list$id.simul_forest,
-                              sim_invasion=sim_invasion,
-                              fit.list.allspecies=fit.list.allspecies)),
+                               id.simul_forest=sim_forest_list$id.simul_forest,
+                               sim_invasion=sim_invasion,
+                               fit.list.allspecies=fit.list.allspecies)),
   #' 2. Extract resilience metric
-    tar_target(disturbance_metric,
+  tar_target(disturbance_metric,
              get_resilience_metrics(species.combination=sim_forest_list$list.forests,
                                     sim_dist.id,
                                     sim_disturbance,
@@ -345,16 +345,16 @@ list(
   #' 3. Get BA initial
   tar_target(invasion_ba,
              get_bainit_inv(sim_forest_list,
-                           sim_equil,
-                           invasion_metric,
-                           elast=FALSE,
-                           species.list.ipm)),
+                            sim_equil,
+                            invasion_metric,
+                            elast=FALSE,
+                            species.list.ipm)),
   tar_target(invasion_ba_elast,
              get_bainit_inv(sim_forest_list_elast,
-                           sim_equil,
-                           invasion_metric_elast,
-                           elast=TRUE,
-                           species.list.ipm)),
+                            sim_equil,
+                            invasion_metric_elast,
+                            elast=TRUE,
+                            species.list.ipm)),
   tar_target(disturbance_ba,
              get_bainit_dist(sim_forest_list,
                              sim_equil,
@@ -379,7 +379,7 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare data for simulations -----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+  
   # -- generate one climate object per iteration with branching
   # tar_target(climate_storm, make_climate(
   #   FUNDIV_climate_species, quantiles.in = climate_list_storm[[ID.climate_storm]], 

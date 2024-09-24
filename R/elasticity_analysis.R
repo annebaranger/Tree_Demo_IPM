@@ -60,7 +60,8 @@ disturbance <- bind_rows(disturbance_metric,
   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
                                TRUE~0)) %>% 
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-         ba_target=sum(value*ba_multiple,na.rm = TRUE)) %>% 
+         ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+         rel_ba_partner=ba_partner/(ba_target+ba_partner)) %>% 
   ungroup() %>% 
   select(-ba_multiple) %>% 
   pivot_wider(names_from = name,
@@ -74,7 +75,11 @@ invasion <- bind_rows(invasion_metric,
   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
                                 TRUE~0)) %>% 
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-         ba_target=sum(value*ba_multiple,na.rm = TRUE)) %>% 
+         ba_target=sum(value*ba_multiple,na.rm = TRUE),
+         rel_ba_partner=if_else(ba_partner!=0,
+                                ba_partner/(ba_target+ba_partner),
+                                0)) %>% 
+  
   ungroup() %>% 
   select(-ba_multiple) %>% 
   pivot_wider(names_from = name,
@@ -114,7 +119,9 @@ performance <-invasion %>%
   mutate(ba_partner=case_when(grepl("inv",metric)~ba_partner.x,
                               TRUE~ba_partner.y),
          ba_target=case_when(grepl("inv",metric)~ba_target.x,
-                             TRUE~ba_target.y)) %>% 
+                             TRUE~ba_target.y),
+         rel_ba_partner=case_when(grepl("inv",metric)~rel_ba_partner.x,
+                              TRUE~rel_ba_partner.y)) %>% 
   select(!matches(".x")) %>% select(!matches(".y"))
 
 
@@ -161,16 +168,16 @@ elasticity %>%
 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(species_combination%in%c("Abies_alba","Abies_alba.Picea_abies","Abies_alba.Fagus_sylvatica",
-                                  "Abies_alba.Picea_abies.Pinus_sylvestris",
-                                  "Fagus_sylvatica","Fagus_sylvatica.Quercus_petraea",
-                                  "Fagus_sylvatica.Pinus_sylvestris","Fagus_sylvatica.Quercus_robur")) %>%
+  # filter(species_combination%in%c("Abies_alba","Abies_alba.Picea_abies","Abies_alba.Fagus_sylvatica",
+  #                                 "Abies_alba.Picea_abies.Pinus_sylvestris",
+  #                                 "Fagus_sylvatica","Fagus_sylvatica.Quercus_petraea",
+  #                                 "Fagus_sylvatica.Pinus_sylvestris","Fagus_sylvatica.Quercus_robur")) %>%
   filter(!metric%in%c("inv_max","inv_mean")) %>% 
   filter(vr=="mean") %>%
   mutate(elast_combi=as.factor(paste0(elast,species_combination))) %>% 
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=0.5)+
+  geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   theme_bw()+
@@ -180,7 +187,26 @@ performance %>%
        color="Total basal area of competitors")
 
 # explore effect variation of competition with cliamte
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(metric=="resistance") %>% #select one metric only with equil ba
+  filter(vr=="mean") %>% 
+  group_by(species,species_combination) %>% 
+  filter(n()>4) %>%
+  ggplot(aes(pca1,ba_partner,color=species_combination))+
+  geom_point()+
+  geom_smooth()+
+  facet_wrap(~species)
 
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(metric=="resistance") %>% #select one metric only with equil ba
+  filter(vr=="mean") %>% 
+  group_by(species,species_combination) %>% 
+  filter(n()>4) %>%
+  ggplot(aes(as.factor(pca1),ba_partner))+
+  geom_boxplot()+
+  facet_wrap(~species,nrow=2)
 
 # show elasticity
 performance %>% 
@@ -267,6 +293,9 @@ performance %>%
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   facet_wrap(species~metric,scales="free_y",ncol=4)
+
+
+
 
 
 ## add traits of competitors
