@@ -407,6 +407,37 @@ make_species_combinations <- function(FUNDIV_data,
   return(species.clim.combi)
 }
 
+#' Function that computes climate boundaries for matrix mu fits
+#' @param species.combination list of species combinations
+make_clim_boundaries <- function(species.combination){
+  out<-setNames(data.frame(matrix(ncol=8,nrow = 0)),
+                nm =c("species","N","sgdd","sgdd2","sgddb","wai","wai2","waib"))
+  for (species in unique(species.combination$species)){
+    s_p=gsub(" ","_",species)
+    sp.combi<-species.combination %>% 
+      filter(grepl(s_p,species_combination)) 
+    sgdd_max=max(sp.combi$sgdd)
+    wai_max=max(sp.combi$wai)
+    sgdd_min=min(sp.combi$sgdd)
+    wai_min=min(sp.combi$wai)
+    sgdd_med=median(sp.combi$sgdd)
+    wai_med=median(sp.combi$wai)
+    new_rows <- data.frame(
+      species = c(s_p, s_p, s_p),
+      N = c(3, 2, 1),
+      sgdd = c(sgdd_min, sgdd_med, sgdd_max),
+      sgdd2 = c(sgdd_min^2, sgdd_med^2, sgdd_max^2),
+      sgddb = c(1/sgdd_min, 1/sgdd_med, 1/sgdd_max),
+      wai = c(wai_max, wai_med, wai_min),
+      wai2 = c(wai_max^2, wai_med^2, wai_min^2),
+      waib = c(1/wai_max, 1/wai_med, 1/wai_min)
+    )
+    out<-rbind(out,
+               new_rows)
+  }
+  return(out)
+}
+
 #' Function create a list of all species object to be created
 #' @param species.combination table of species combination for each climate cat
 make_species_list <- function(species.combination){
@@ -499,6 +530,7 @@ make_species_rds <- function(fit.list.allspecies, species_list, species.obj.id){
 #' @author Anne Baranger
 make_species_mu <- function(fit.list.allspecies,
                             species.select, 
+                            clim_bound,
                             sp_id){
   sp=species.select[sp_id]
   s_p=gsub(" ","_",sp)
@@ -507,6 +539,7 @@ make_species_mu <- function(fit.list.allspecies,
   # Make IPM
   IPM.mu <- make_mu_gr(
     species = s_p, fit = fit.list.allspecies[[s_p]],
+    climate = subset(clim_bound,species == s_p, select = -species),
     mesh = c(m = 700, L = 90, U = get_maxdbh(fit.list.allspecies[[s_p]]) * 1.1),
     verbose = TRUE, stepMu = 0.0001)
   

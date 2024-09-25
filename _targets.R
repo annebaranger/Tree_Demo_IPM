@@ -116,7 +116,8 @@ list(
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
   
-  
+  tar_target(clim_bound,
+             make_clim_boundaries(species.combination)),
   # create a list of all species to be computed
   tar_target(species_list,
              make_species_list(species.combination)),
@@ -157,6 +158,7 @@ list(
   tar_target(species_object_mu,
              make_species_mu(fit.list.allspecies,
                              species_list.mu.select,
+                             clim_bound,
                              species.obj.mu.id),
              pattern=map(species.obj.mu.id),
              iteration="vector",
