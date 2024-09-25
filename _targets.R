@@ -30,7 +30,8 @@ for(i in 1:length(packages.in)) if(!(packages.in[i] %in% rownames(installed.pack
 # Targets options
 options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")
 tar_option_set(packages = packages.in,
-               memory = "transient")
+               memory = "transient",
+               error = "null")
 future::plan(future::multisession, workers = 60)
 set.seed(2)
 
