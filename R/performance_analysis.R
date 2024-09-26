@@ -111,24 +111,27 @@ performance %>%
 # explore effect variation of competition with cliamte
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(metric=="resistance") %>% #select one metric only with equil ba
+  filter(metric=="inv_50") %>% #select one metric only with equil ba
   filter(vr=="mean") %>% 
   group_by(species,species_combination) %>% 
   filter(n()>4) %>%
   ggplot(aes(pca1,ba_partner,color=species_combination))+
   geom_point()+
   geom_smooth()+
+  theme(legend.position = "none")+
   facet_wrap(~species)
 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(metric=="resistance") %>% #select one metric only with equil ba
+  filter(metric=="inv_50") %>% #select one metric only with equil ba
   filter(vr=="mean") %>% 
-  group_by(species,species_combination) %>% 
-  filter(n()>4) %>%
-  ggplot(aes(as.factor(pca1),ba_partner))+
-  geom_boxplot()+
-  facet_wrap(~species,nrow=2)
+  filter(ba_partner!=0) %>% 
+  group_by(species) %>%
+  # ungroup() %>% 
+  mutate(ba_partner=scale(ba_partner)) %>%
+  ggplot(aes(pca1,ba_partner,color=species))+
+  geom_point()+
+  geom_smooth(method="lm",se = FALSE)
 
 # show elasticity
 performance %>% 
@@ -217,51 +220,3 @@ performance %>%
   facet_wrap(species~metric,scales="free_y",ncol=4)
 
 
-
-
-
-## add traits of competitors
-
-
-
-#open simul of abal.piab.pisy & abal.piab for the same climate
-# app<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
-# ap<-readRDS("rds/Abies_alba/clim_1/sim_disturbance/Abies_alba.Picea_abies.rds")
-# readRDS("rds/Fagus_sylvatica/clim_5/sim_disturbance/Fagus_sylvatica.rds")->sim
-# 
-# sim %>% filter(var=="BAsp",species!="Picea_abies") %>% 
-#   ggplot(aes(time,value,color=species))+
-#   geom_line()+
-#   xlim(c(490,503))
-# sim %>% filter(var=="H",time==500)
-
-
-tar_load(sim_dist.id)
-tar_load(sim_disturbance)
-sim_disturbance<-sim_disturbance[grepl("Fagus_sylvatica/",sim_disturbance)]
-readRDS(sim_disturbance[1])
-
-out<-setNames(data.frame(matrix( nrow = 0,ncol=9)),
-              nm=c("species","var","time","mesh","size","equil","value","sim","ba_partner"))
-for(i in 1:length(sim_disturbance)){
-  print(i)
-  species_partner=str_remove(strsplit(sim_disturbance[i],"/")[[1]][[5]],".rds")
-  clim=as.numeric(strsplit(strsplit(sim_disturbance[i],"/")[[1]][[3]],"_")[[1]][[2]])
-  sp=strsplit(sim_disturbance[i],"/")[[1]][[2]]
-  ba_partner=disturbance %>% 
-    filter(species==gsub("_"," ",sp)&
-             species_combination==species_partner&
-             clim_id==clim&
-             grepl("amean",elast)) %>% 
-    pull(ba_partner)
-  sim.i<-readRDS(sim_disturbance[i]) %>% 
-    filter(species=="Fagus_sylvatica") %>% 
-    filter(var=="BAsp") %>% 
-    mutate(sim=i,
-           ba=ba_partner)
-  out<-rbind(out,sim.i)
-}
-out %>% 
-  filter(var=="BAsp") %>% 
-  ggplot(aes(time,value,color=ba,group=as.factor(sim)))+
-  geom_line()
