@@ -8,6 +8,7 @@ library(lme4)
 #### get basic data ####
 #%%%%%%%%%%%%%%%%%%%%%%%
 tar_load(species.list.ipm)
+tar_load(species.list.disturbance)
 
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
@@ -32,28 +33,8 @@ invasion_metric<-tar_read(invasion_ba) %>%
   select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,matches(species.list.ipm)) 
 
 
-# get disturbance metrics from elasticity analysis
-tar_load(disturbance_ba_elast)
-disturbance_ba_elast<-disturbance_ba_elast %>%
-  select(species,elast,species_combination,clim_id,resilience,resistance,recovery,matches(species.list.ipm)) %>% 
-  rowwise() %>% 
-  mutate(species_combination=gsub(pattern=elast,
-                                  replacement=gsub(" ","_",species),
-                                  x=species_combination),
-         vr=str_split(elast,pattern="-",simplify = T)[2]) %>% 
-  ungroup()
-invasion_metric_elast<-tar_read(invasion_ba_elast) %>% 
-  select(species,elast,species_combination,clim_id,inv_mean,inv_max,inv_50,matches(species.list.ipm)) %>% 
-  rowwise() %>% 
-  mutate(species_combination=gsub(pattern=elast,
-                                  replacement=gsub(" ","_",species),
-                                  x=species_combination),
-         vr=str_split(elast,pattern="-",simplify = T)[2]) %>% 
-  ungroup()
-
 # compute mean elasticity per vital rates, for each species combi/clim
-disturbance <- bind_rows(disturbance_metric,
-                         disturbance_ba_elast) %>% 
+disturbance <- disturbance_metric %>% 
   arrange(species,clim_id,species_combination,elast) %>% 
   pivot_longer(cols=matches(species.list.ipm)) %>% 
   group_by(species,elast,species_combination,clim_id,vr) %>% 
@@ -67,8 +48,7 @@ disturbance <- bind_rows(disturbance_metric,
   pivot_wider(names_from = name,
               values_from = value) %>% 
   select(!matches(species.list.ipm))
-invasion <- bind_rows(invasion_metric,
-                      invasion_metric_elast) %>% ungroup() %>% 
+invasion <- invasion_metric %>% ungroup() %>% 
   arrange(species,species_combination,clim_id) %>% 
   pivot_longer(cols=matches(species.list.ipm)) %>% 
   group_by(species,elast,species_combination,clim_id,vr) %>% 
@@ -85,29 +65,6 @@ invasion <- bind_rows(invasion_metric,
   pivot_wider(names_from = name,
               values_from = value) %>% 
   select(!matches(species.list.ipm))
-
-elasticity<- invasion %>% 
-  left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
-  arrange(species,clim_id,species_combination,elast,vr) %>% 
-  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50"),
-               names_to="metric",
-               values_to="metric_val") %>% 
-  filter(!grepl("Fagus_sylvatica.Picea.abies",species_combination)) %>% 
-  mutate(ba_partner=case_when(grepl("inv",metric)~ba_partner.x, 
-                              TRUE~ba_partner.y),
-         ba_target=case_when(grepl("inv",metric)~ba_target.x,
-                             TRUE~ba_target.y)) %>% 
-  group_by(species,clim_id,species_combination,metric) %>% 
-  mutate(dmetric=100*(metric_val[1]-metric_val)/metric_val[1]) %>%
-  ungroup() %>%
-  filter(vr!="mean") %>% 
-  group_by(species,clim_id,species_combination,metric,vr) %>% 
-  summarise(elast_mean=mean(dmetric),
-            elast_sd=sd(dmetric),
-            ba_partner_mean=mean(ba_partner),
-            ba_target_mean=mean(ba_target)) %>% 
-  ungroup() %>% 
-  filter(metric%in%c("resilience","recovery","resistance","inv_50"))
 
 performance <-invasion %>% 
   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
@@ -128,42 +85,6 @@ performance <-invasion %>%
 #### plots ####
 #%%%%%%%%%%%%%%
 
-elasticity %>% 
-  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(species=="Abies alba") %>% 
-  filter(ba_partner_mean<100) %>% 
-  # filter(clim_id!=10) %>% 
-  ggplot(aes(pca1,elast_mean,color=ba_partner_mean,group=species_combination))+
-  geom_point()+
-  geom_smooth(aes(pca1,elast_mean,color=ba_partner_mean,group=species_combination),
-              method="gam")+
-  # geom_smooth(aes(group=species_combination))+
-  scale_color_gradientn(colours = viridis(15),trans="log")+
-  # ylim(c(-0.4,0.4))+
-  geom_hline(yintercept = 0)+
-  facet_wrap(vr~metric,scales="free_y")
-
-# example of vital rates sensitivity, for abies alba, inv_50
-elasticity %>% 
-  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(species=="Abies alba") %>% 
-  filter(metric=="inv_50") %>% 
-  filter(ba_partner_mean<100) %>% 
-  # filter(clim_id!=10) %>% 
-  ggplot(aes(pca1,elast_mean,color=ba_partner_mean,group=species_combination))+
-  geom_line(color="grey")+
-  geom_point()+
-  # geom_smooth(aes(group=species_combination))+
-  scale_color_gradientn(colours = viridis(15),trans="log")+
-  # ylim(c(-0.4,0.4))+
-  geom_hline(yintercept = 0)+
-  facet_wrap(vr~metric,scales="free_y")+
-  theme_bw()+
-  labs(x="PCA first axis (cold/wet -> hot/dry)",
-       y="Mean elasticity of performance to vital rate",
-       color="Total basal area of competitors",
-       title="Abies alba")
-
 # variation of performances with climate and compet
 
 performance %>% 
@@ -172,16 +93,17 @@ performance %>%
   #                                 "Abies_alba.Picea_abies.Pinus_sylvestris",
   #                                 "Fagus_sylvatica","Fagus_sylvatica.Quercus_petraea",
   #                                 "Fagus_sylvatica.Pinus_sylvestris","Fagus_sylvatica.Quercus_robur")) %>%
-  filter(!metric%in%c("inv_max","inv_mean")) %>% 
+  # filter(!metric%in%c("inv_max","inv_mean")) %>%
+  filter(metric=="recovery") %>% 
   filter(vr=="mean") %>%
-  mutate(elast_combi=as.factor(paste0(elast,species_combination))) %>% 
+  filter(species %in% gsub("_"," ",species.list.disturbance)) %>% 
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
   geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   theme_bw()+
-  facet_wrap(species~metric,scales="free_y",ncol=4)+
+  facet_wrap(species~metric,scale="free_y",ncol=4)+
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
