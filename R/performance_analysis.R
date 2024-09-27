@@ -96,14 +96,16 @@ performance %>%
   # filter(!metric%in%c("inv_max","inv_mean")) %>%
   filter(metric=="recovery") %>% 
   filter(vr=="mean") %>%
-  filter(species %in% gsub("_"," ",species.list.disturbance)) %>% 
+  filter(species %in% gsub("_"," ",species.list.disturbance)) %>%   
+  # group_by(species,species_combination,metric) %>% 
+  # filter(n()>8) %>%
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
   geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15),trans="log")+
   theme_bw()+
-  facet_wrap(species~metric,scale="free_y",ncol=4)+
+  facet_wrap(species~metric,scale="free",ncol=4)+
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
