@@ -92,6 +92,7 @@ disturbance<-disturbance_metric %>%
 
 
 performance <-invasion %>% 
+  select(-shade_target) |> 
   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
   arrange(species,clim_id,species_combination,elast,vr) %>% 
   pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50"),
@@ -136,3 +137,47 @@ performance %>%
 #### model ####
 #%%%%%%%%%%%%%
 library(semEff)
+mod_data<-performance |> 
+  filter(metric=="resilience") |> 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) |> 
+  mutate(pca12=pca1^2)
+mod_data <- na.omit(mod_data)
+# submodel for climate and competition
+mod_data |> ggplot(aes(ba_partner,pca1,color=species_combination))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  theme(legend.position = "none")+facet_wrap(~species,scales="free")
+mod_compet<-lmer(nid~(1|species)+(1|species:species_combination)+
+               pca1,data=mod_data)
+confint(mod_compet)
+
+
+mod_resi<-lmer(metric_val ~ (1|species)+(1|species:species_combination)+ pca1 + pca12 +
+               pca1*ba_partner + pca1*nih , data=mod_data)
+confint(mod_resi)
+summary(mod_resi)
+# -- Make model
+mod_sem = list(
+  lm(ba_partner~species+species:species_combination+
+         pca1,data=mod_data), 
+  # lmer(nih~(1|species)+(1|species:species_combination)+
+  #       pca1,data=mod_data), 
+  lm(metric_val ~ species+species:species_combination+ pca1 +
+         pca1*ba_partner + pca1*nih , data=mod_data))
+
+
+
+# Extract the effects
+boot_sem = bootEff(mod_sem, R = 5, seed = 13, parallel = "no")
+
+piecewiseSEM:::plot.psem(
+  piecewiseSEM::as.psem(mod_sem),
+  node_attrs = data.frame(shape = "rectangle", color = "black", fillcolor = "grey"),
+  layout = "tree"
+)
+# Output list
+out = list()
+out$sem = mod_sem
+out$boot = boot_sem
+
+# Return output
