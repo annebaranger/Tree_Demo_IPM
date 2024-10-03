@@ -136,7 +136,7 @@ list(
   
   # subselect species and climate to fit
   tar_target(species.select,
-             gsub("_"," ",species.list.ipm)),
+             gsub("_"," ",species.list.disturbance)),
   tar_target(clim.select,
              1:10), 
   tar_target(species_list.select,
