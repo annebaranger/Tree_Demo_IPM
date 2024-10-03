@@ -129,7 +129,7 @@ list(
              pattern=map(sp_id),iteration = "vector"),
   
   tar_target(clim_bound,
-             make_clim_boundaries(species.combination)),
+             make_clim_boundaries(species_list.select)),
   # create a list of all species to be computed
   tar_target(species_list,
              make_species_list(species.combination)),

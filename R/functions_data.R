@@ -448,7 +448,7 @@ make_species_combinations <- function(FUNDIV_data,
 make_clim_boundaries <- function(species.combination){
   out<-setNames(data.frame(matrix(ncol=8,nrow = 0)),
                 nm =c("species","N","sgdd","sgdd2","sgddb","wai","wai2","waib"))
-  for (species in unique(species.combination$species)){
+  for (species in unique(species.combination$species_combination)){
     s_p=gsub(" ","_",species)
     sp.combi<-species.combination %>% 
       filter(grepl(s_p,species_combination)) 
