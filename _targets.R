@@ -30,8 +30,8 @@ for(i in 1:length(packages.in)) if(!(packages.in[i] %in% rownames(installed.pack
 # Targets options
 options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")
 tar_option_set(packages = packages.in,
-               memory = "transient",
-               error = "null")
+               memory = "transient")
+               # error = "null")
 future::plan(future::multisession, workers = 60)
 set.seed(2)
 
@@ -48,7 +48,11 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   # Disturbance coefficients
-  tar_target(disturb_coef.in, fread("data/disturb_coef.csv")),
+  tar_target(disturb_coef.raw,read.csv("data/disturb_coef_complete.csv")),
+  tar_target(species_meta,get_species_meta(species.list.ipm)),  
+  tar_target(disturb_coef.in, get_disturb_coef(disturb_coef.raw,
+                                               species_meta,
+                                               species.list.ipm)),
   
   # Raw data from FUNDIV
   tar_target(FUNDIV_tree_file, "data/FunDiv_trees_Nadja.csv", format = "file"),
@@ -65,26 +69,27 @@ list(
   
   # List of species for which we have data
   tar_target(all.species.name, 
-             colnames(FUNDIV_climate_species)[grep("_", colnames(FUNDIV_climate_species))]), 
+             unique(climate_species$sp[climate_species$sp %in% gsub(" ","_",unique(FUNDIV_data$species))])),
+             # colnames(FUNDIV_climate_species)[grep("_", colnames(FUNDIV_climate_species))]), 
   
   # Get demographic parameters for all species
-  tar_target(fit.list.allspecies, load_param_demo(all.species.name)),
+  tar_target(fit.list.allspecies, readRDS("data/new_fit_list.rds")),#load_param_demo(all.species.name)),
   
   # get parameters names
   tar_target(pars_list,
              get_list_pars(fit.list.allspecies)),
   
   # Mention species to exclude
-  tar_target(species.excl.ipm,c("Carpinus_betulus","Juniperus_thurifera" ,"Quercus_ilex", "Salix_caprea")),
+  tar_target(species.excl.ipm,c("Juniperus_thurifera" , "Salix_caprea")), #"Carpinus_betulus","Quercus_ilex",
   
   # Get all species for which IPM are available, and Fundiv data
   tar_target(species.list.ipm,names(fit.list.allspecies)[!names(fit.list.allspecies) %in%
                                                            species.excl.ipm]),
   
-  tar_target(sp_id,seq_along(species.list.ipm)),
+  tar_target(sp_id,seq_along(species.list.disturbance)),
   # Get all species for which disturbance pars are available
   tar_target(species.list.disturbance,species.list.ipm[species.list.ipm %in%
-                                                         disturb_coef.in[disturb_coef.in$disturbance=="storm","species"][[1]]]),
+                                                         disturb_coef.in[disturb_coef.in$real.coef,"species"]]),
   
   # Generate some harvest rules = default? ask Maskimus
   tar_target(harv_rules.ref, c(Pmax = 0.25, dBAmin = 3, freq = 1, alpha = 1)),
@@ -106,11 +111,18 @@ list(
   ),
   
   # For each cliamte condition, species combinations
+  tar_target(species_competitors,
+             get_species_competitors(FUNDIV_data,
+                                     species.list.ipm,
+                                     sp_id),
+             pattern=map(sp_id),
+             iteration="vector"),
   tar_target(species.combination,
              make_species_combinations(FUNDIV_data=FUNDIV_data,
                                        FUNDIV_plotcat=climate.cat$FUNDIV_plotcat,
                                        condi.init=climate.cat$species.cat,
                                        sp_id=sp_id,
+                                       species.list.disturbance=species.list.disturbance,
                                        species.list.ipm=species.list.ipm, 
                                        nsp_per_richness=10,
                                        prop_threshold=0.8),

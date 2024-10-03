@@ -8,3 +8,9 @@ matreex_vignette.R
 R/code_JB/
 EcoLet2022/
 rds/
+*.rdata
+figure/
+_targets_elast/
+LTRE.R
+*.pptx
+rds_elast/
