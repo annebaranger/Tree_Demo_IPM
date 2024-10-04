@@ -2276,7 +2276,15 @@ get_list_pars<-function(fit.list.allspecies){
 
 
 
-
+#' Function to get indices of species in TRY
+get_TRY_species<-function(file.try="data/try_species.csv",
+                          species.list.ipm){
+  try_sp<-read.csv2(file.try) |> 
+    mutate(species=paste(AccSpeciesName,ObsNum,sep="_")) |> 
+    filter(species%in%c(species.list.ipm,"Betula_pubescens","Betula_pendula")) |> 
+    group_by(species) |>
+    filter(as.numeric(TraitNum)==max(as.numeric(TraitNum))) 
+}
 
 
 
