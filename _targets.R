@@ -343,15 +343,21 @@ list(
   # -- Make analysis ----
   #%%%%%%%%%%%%%%%%%%%%%%
   
+  #' 0. Identify simul with exclusion
+  tar_target(sim_forest_excl,
+             is_species_excluded(sim_forest_list,
+                                 sim_equil)
+             ),
+  
   #' 1. Compute invasion rate
   tar_target(invasion_metric,
-             get_invasion_rate(species.combination=sim_forest_list$list.forests,
+             get_invasion_rate(species.combination=sim_forest_excl$list.forests,
                                id.simul_forest=sim_forest_list$id.simul_forest,
                                sim_invasion=sim_invasion,
                                fit.list.allspecies=fit.list.allspecies)),
   #' 2. Extract resilience metric
   tar_target(disturbance_metric,
-             get_resilience_metrics(species.combination=sim_forest_list$list.forests,
+             get_resilience_metrics(species.combination=sim_forest_excl$list.forests,
                                     sim_dist.id,
                                     sim_disturbance,
                                     fit.list.allspecies,
@@ -359,7 +365,7 @@ list(
   
   #' 3. Get BA initial
   tar_target(invasion_ba,
-             get_bainit_inv(sim_forest_list,
+             get_bainit_inv(sim_forest_excl,
                             sim_equil,
                             invasion_metric,
                             elast=FALSE,
@@ -371,7 +377,7 @@ list(
                             elast=TRUE,
                             species.list.ipm)),
   tar_target(disturbance_ba,
-             get_bainit_dist(sim_forest_list,
+             get_bainit_dist(sim_forest_excl,
                              sim_equil,
                              disturbance_metric,
                              elast=FALSE,
