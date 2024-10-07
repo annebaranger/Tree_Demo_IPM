@@ -356,12 +356,19 @@ list(
                                sim_invasion=sim_invasion,
                                fit.list.allspecies=fit.list.allspecies)),
   #' 2. Extract resilience metric
+  tar_target(
+    forest_iteration,
+    sim_dist.id
+  ),
   tar_target(disturbance_metric,
              get_resilience_metrics(species.combination=sim_forest_excl$list.forests,
                                     sim_dist.id,
+                                    forest_iteration,
                                     sim_disturbance,
                                     fit.list.allspecies,
-                                    disturbance.df_storm)),
+                                    disturbance.df_storm),
+             pattern=map(sim_dist.id),
+             iteration = "vector"),
   
   #' 3. Get BA initial
   tar_target(invasion_ba,
