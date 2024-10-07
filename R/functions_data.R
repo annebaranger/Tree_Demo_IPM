@@ -1460,8 +1460,9 @@ make_simulations_disturbance = function(species.combination,
   # set the appropriate name for variable selection
   if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
   
+  sp_excl=(species.combination$excluded[id_forest]!="excluded")
   # Only make the simulation if population reached an equilibrium
-  if(reached_equil){
+  if(reached_equil&sp_excl){
     # Loop on all species
     for(i in 1:length(species.in)){
       
@@ -1955,7 +1956,7 @@ get_invasion_rate<-function(species.combination,
         
         first.extr<-derivative.i |>  
           filter(time<1000) |> 
-          mutate(sign_eq=(sign(der2)==sign(lag(der2)))) |> 
+          mutate(sign_eq=(sign(der)==sign(lag(der)))) |> 
           filter(sign_eq==FALSE) |> slice(1) |> 
           dplyr::select(time) |> pull(time)
         

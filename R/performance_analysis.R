@@ -13,13 +13,51 @@ tar_load(species.list.disturbance)
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
   group_by(species,clim_id) %>% 
-  summarise(pca1=mean(pca1),pca2=mean(pca2))
+  summarise(pca1=mean(pca1),pca2=mean(pca2)) %>% 
+  ungroup()
 
 # clean list of combinations
+
+species.combination.excl<-tar_read(sim_forest_excl)$list.forests %>% 
+  filter(forest.real) %>% 
+  dplyr::select(species,clim_id,species_combination,excluded,competexcluded) %>% unique()
+
 species.combination.select<- tar_read(species.combination.select) %>% 
   # mutate(pca1=(clim_up-clim_low)/2) %>% 
-  select(species,species_combination,n_species,clim_id,wai,sgdd,clim_up,clim_low) %>% 
-  left_join(mean_pca,by=c("species","clim_id"))
+  left_join(mean_pca,by=c("species","clim_id")) %>% 
+  left_join(species.combination.excl,by=c("species","clim_id","species_combination")) %>% 
+  dplyr::select(species,species_combination,n_species,excluded,competexcluded,
+                clim_id,pca1,pca2,wai,sgdd,clim_up,clim_low) 
+  
+
+
+### analyse species exclusion ###
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+species.combination.excl$smallcombi<-NA
+for(i in 1:dim(species.combination.excl)[1]){
+  if(species.combination.excl$competexcluded[i]!=""){
+    s_p=gsub(" ","_",species.combination.excl$species[i])
+    sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
+    # sp_combi=sp_combi[sp_combi!=s_p]
+    sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
+    
+    new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
+    ex<-species.combination.excl %>% 
+      filter(species==species.combination.excl$species[i]&
+               clim_id==species.combination.excl$clim_id[i]&
+               species_combination==new_combi)
+    if(dim(ex)[1]==1){
+      species.combination.excl$smallcombi[i]="present"
+    }else{
+      species.combination.excl$smallcombi[i]="absent"
+    }
+  }
+  
+}
+# for checking the proportion of combination represented after species exclusion
+# species.combination.excl %>% 
+#   filter(competexcluded!="") %>% 
+#   filter(smallcombi=="absent") 
 
 #### get invasion metrics ####
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -27,10 +65,10 @@ species.combination.select<- tar_read(species.combination.select) %>%
 # get disturbance metrics from mean 
 disturbance_metric<-tar_read(disturbance_ba) %>% 
   mutate(elast="Abies_alba-amean",vr="mean") %>%
-  select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
+  dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
 invasion_metric<-tar_read(invasion_ba) %>% 
   mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
-  select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,matches(species.list.ipm)) 
+  dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,matches(species.list.ipm)) 
 
 
 # compute mean elasticity per vital rates, for each species combi/clim
@@ -44,10 +82,10 @@ disturbance <- disturbance_metric %>%
          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
          rel_ba_partner=ba_partner/(ba_target+ba_partner)) %>% 
   ungroup() %>% 
-  select(-ba_multiple) %>% 
+  dplyr::select(-ba_multiple) %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
-  select(!matches(species.list.ipm))
+  dplyr::select(!matches(species.list.ipm)) 
 invasion <- invasion_metric %>% ungroup() %>% 
   arrange(species,species_combination,clim_id) %>% 
   pivot_longer(cols=matches(species.list.ipm)) %>% 
@@ -61,11 +99,12 @@ invasion <- invasion_metric %>% ungroup() %>%
                                 0)) %>% 
   
   ungroup() %>% 
-  select(-ba_multiple) %>% 
+  dplyr::select(-ba_multiple) %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
-  select(!matches(species.list.ipm))
-
+  dplyr::select(!matches(species.list.ipm))%>% 
+  left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
+ 
 performance <-invasion %>% 
   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
   arrange(species,clim_id,species_combination,elast,vr) %>% 
@@ -79,7 +118,9 @@ performance <-invasion %>%
                              TRUE~ba_target.y),
          rel_ba_partner=case_when(grepl("inv",metric)~rel_ba_partner.x,
                                   TRUE~rel_ba_partner.y)) %>% 
-  select(!matches(".x")) %>% select(!matches(".y"))
+  dplyr::select(!matches("\\.x")) %>% dplyr::select(!matches(".y")) %>% 
+  filter(excluded!="excluded") %>% 
+  filter(is.na(smallcombi)|smallcombi!="present")
 
 
 #### plots ####
@@ -197,6 +238,7 @@ performance %>%
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Type of performance")
+
 
 # model test
 performance %>% 

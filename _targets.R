@@ -32,7 +32,7 @@ options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")
 tar_option_set(packages = packages.in,
                memory = "transient")
                # error = "null")
-future::plan(future::multisession, workers = 60)
+future::plan(future::multisession, workers = 55)
 set.seed(2)
 
 
@@ -198,6 +198,12 @@ list(
              pattern=map(sim_equil.id),
              iteration="vector",
              format="file"),
+  # Identify simul with exclusion
+  tar_target(sim_forest_excl,
+             is_species_excluded(sim_forest_list,
+                                 sim_equil)
+  ),
+  
   
   # simulation for invasion
   tar_target(sim_invasion.id,
@@ -216,10 +222,11 @@ list(
   
   # simulation for disturbance
   tar_target(sim_dist.id,
-             create_simulation_dist_list(sim_forest_list$list.forests,
-                                         species.list.disturbance)),
+             sim_forest_list$id.simul_forest),
+             # create_simulation_dist_list(sim_forest_list$list.forests,
+             #                             species.list.disturbance)),
   tar_target(sim_disturbance,
-             make_simulations_disturbance(sim_forest_list$list.forests,
+             make_simulations_disturbance(sim_forest_excl$list.forests,
                                           species_list.select,
                                           species_object_mu,
                                           harv_rules.ref,
@@ -342,12 +349,6 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%
   # -- Make analysis ----
   #%%%%%%%%%%%%%%%%%%%%%%
-  
-  #' 0. Identify simul with exclusion
-  tar_target(sim_forest_excl,
-             is_species_excluded(sim_forest_list,
-                                 sim_equil)
-             ),
   
   #' 1. Compute invasion rate
   tar_target(invasion_metric,
