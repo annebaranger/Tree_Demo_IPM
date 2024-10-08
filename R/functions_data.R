@@ -1319,7 +1319,7 @@ make_simulations_invasion_2 = function(species.combination,
       lag.i = sim_equilibrium.in %>%
         filter(var == "n", equil, species == species.in[i],size==0) %>%
         mutate(n_tot=sum(value),
-               value_2=value*(n_lag/n_tot),
+               value_2=(value*n_lag)/n_tot,
                n_tot_2=sum(value_2)) %>% 
         pull(value_2)
       rec.i = sim_equilibrium.in %>%
@@ -1327,7 +1327,7 @@ make_simulations_invasion_2 = function(species.combination,
         mutate(value=case_when(size>threshold_pop~0,
                                TRUE~value)) |>
         mutate(BAtot=sum((size/2000)^2*pi*value),
-               value_2=value*(BA_target/BAtot),
+               value_2=(value*BA_target)/BAtot,
                BAtot=sum((size/2000)^2*pi*value_2)) |> 
         pull(value_2)
       equil.i=c(lag.i,rec.i)
