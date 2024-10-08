@@ -209,13 +209,14 @@ list(
   tar_target(sim_invasion.id,
              sim_forest_list$id.simul_forest),
   tar_target(sim_invasion,
-             make_simulations_invasion(sim_forest_list$list.forests,
-                                       species_list.select,
-                                       species_object_mu,
-                                       harv_rules.ref,
-                                       sim_equil,
-                                       threshold_pop=200,
-                                       id_forest=sim_invasion.id),
+             make_simulations_invasion_2(sim_forest_list$list.forests,
+                                         species_list.select,
+                                         species_object_mu,
+                                         harv_rules.ref,
+                                         sim_equil,
+                                         BA_target=1,
+                                         threshold_pop=200,
+                                         id_forest=sim_invasion.id),
              pattern=map(sim_invasion.id),
              iteration="vector",
              format="file"),
@@ -397,13 +398,10 @@ list(
                              elast=TRUE,
                              species.list.ipm)),
   
-  
-  #' 2. extract parameters of each climatic conditions (earlier?)
-  
-  #' 3. fit gam for each metrics
-  
-  #' 4. randomisation of contribution and demographic compensation?
-  
+  #' 4. Get BA final
+  tar_target(ba_dif,
+             get_dif_ba(disturbance_ba,
+                        species.list.ipm)),
   
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare data for simulations -----

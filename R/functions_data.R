@@ -1265,6 +1265,124 @@ make_simulations_invasion = function(species.combination,
   return(forest.file)
 }
 
+#' Function to make a list of invasion simulations
+#' @param species.combination table with all species combi for each climate cat
+#' @param species_list table with all species fit info 
+#' @param species_object list of files of fitted species
+#' @param harv_rules.ref rules for harvesting
+#' @param sim_equil path of simulation until equilibrium
+#' @param threshold_pop dimater threshold of initial population
+#' @param id_forest id of the forest to simulate
+make_simulations_invasion_2 = function(species.combination,
+                                     species_list,
+                                     species_object,
+                                     harv_rules.ref,
+                                     sim_equil,
+                                     BA_target=1,
+                                     threshold_pop=200,
+                                     sim.type="mu",
+                                     id_forest){
+  print(id_forest)
+  sp=species.combination[id_forest,"species"][[1]]
+  s_p=gsub(" ","_",sp)
+  species.comb=species.combination[id_forest,"species_combination"][[1]]
+  species.in=unlist(strsplit(species.comb,"\\."))
+  clim=species.combination[id_forest,"ID.spclim"][[1]]
+  
+  list.species <- vector("list", length(species.in))
+  names(list.species) = species.in
+  
+  # Read the simulation at equilibrium
+  sim_equilibrium.in = readRDS(sim_equil[id_forest])$distrib_equil
+  reached_equil = readRDS(sim_equil[id_forest])$reached_equil
+  
+  if(sim.type=="mu"){id.obj="id.species.mu.obj"}else{id.obj="id.species.obj"}
+  
+  n_lag<- sim_equilibrium.in %>%
+    filter(var == "n", equil, species == s_p,size==0) %>%  #species.in[i]
+    summarise(n_tot=sum(value)) |> 
+    pull(n_tot)
+  
+  
+  if(reached_equil){
+    for(i in 1:length(species.in)){
+      
+      id.species.obj=species_list[species_list$ID.spclim==clim &
+                                    species_list$species==sp &
+                                    species_list$species_combination==species.in[i],
+                                  id.obj][[1]]
+      # Identify the file in species containing species i
+      species.file.i = species_object[id.species.obj]
+      # Store the file in the list
+      list.species[[i]] = readRDS(species.file.i)
+      
+      lag.i = sim_equilibrium.in %>%
+        filter(var == "n", equil, species == species.in[i],size==0) %>%
+        mutate(n_tot=sum(value),
+               value_2=value*(n_lag/n_tot),
+               n_tot_2=sum(value_2)) %>% 
+        pull(value_2)
+      rec.i = sim_equilibrium.in %>%
+        filter(var == "n", equil, species == species.in[i], size>0) %>%  #species.in[i]
+        mutate(value=case_when(size>threshold_pop~0,
+                               TRUE~value)) |>
+        mutate(BAtot=sum((size/2000)^2*pi*value),
+               value_2=value*(BA_target/BAtot),
+               BAtot=sum((size/2000)^2*pi*value_2)) |> 
+        pull(value_2)
+      equil.i=c(lag.i,rec.i)
+      equil.i[is.nan(equil.i)]<-0
+   
+      
+      # Initiate the population at equilibrium
+      list.species[[i]]$init_pop <- def_init_k(equil.i)
+      
+      # Update disturbance function
+      list.species[[i]]$disturb_fun <- disturb_fun
+    }
+    
+    # Make forest
+    forest.in = new_forest(species = list.species, harv_rules = harv_rules.ref)
+    
+    # Run simulation till equilibrium
+    if(sim.type=="mu"){
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1000,
+                                climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                        "waib", "wai2", "sgdd2", 
+                                                                        "PC1", "PC2", "N", "SDM")],
+                                equil_time = 1000, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }else{
+      sim.in = sim_deter_forest(forest.in, 
+                                tlim = 1000,
+                                equil_time = 1000, 
+                                equil_dist = 50, 
+                                equil_diff = 0.5, 
+                                harvest = "default", 
+                                SurfEch = 0.03,
+                                verbose = TRUE)
+    }
+    sim.in<-sim.in |> filter(var%in%c("N","BAsp"))
+  } else {
+    sim.in = matrix()
+  }
+  
+  forest.file=paste0("rds/", s_p, "/clim_", clim,
+                     "/sim_invasion/", species.comb, ".rds")
+  # Save simulation in a rdata
+  create_dir_if_needed(forest.file)
+  saveRDS(sim.in, forest.file)
+  
+  # Return output list
+  return(forest.file)
+}
+
+
 
 
 #' Function to make a list of invasion simulations
@@ -1931,7 +2049,10 @@ get_invasion_rate<-function(species.combination,
     filter(simul_eq %in% id.simul_forest) |> 
     mutate(inv_mean=NA_real_,
            inv_max=NA_real_,
-           inv_50=NA_real_)
+           inv_50=NA_real_,
+           BA_100=NA_real_,
+           BA_500=NA_real_,
+           BA_1000=NA_real_)
   for (i in 1:length(sim_invasion)){
     # Printer
     print(paste0("Reading simulation ", i, "/", length(sim_invasion)))
@@ -1943,12 +2064,15 @@ get_invasion_rate<-function(species.combination,
     species.i=species.combination[id.sim.i,"species"][[1]]
     s_p.i=gsub(" ","_",species.i)
 
-    if(species.combination$excluded[id.sim.i]!="excluded"){
       if(dim(sim.i)[1]>1){ # check simulation was performed (i.e. equil was reached)
         # get simulation index
         fit.species.i=fit.list.allspecies[[s_p.i]]
         delay.i=as.numeric(fit.species.i$info[["delay"]])
         
+        BA_t <- sim.i %>% 
+          filter(time%in%c(100,500,1000),!equil,var=="BAsp") %>% 
+          filter(species==s_p.i) %>% 
+          pull(value)
         derivative.i <- sim.i |> 
           filter(species==s_p.i,var=="BAsp",time>delay.i) |> 
           mutate(der=(value-lag(value))/(time-lag(time)),
@@ -1970,12 +2094,13 @@ get_invasion_rate<-function(species.combination,
         inv.2<-derivative.i |> 
           filter(time<delay.i+50) |> 
           summarise(inv_50=mean(der,na.rm=TRUE))
-        out[out$simul_eq==id.sim.i,c("inv_mean","inv_max","inv_50")]=
-          list(inv.1$inv_mean[[1]],
+        out[out$simul_eq==id.sim.i,c("inv_mean","inv_max","inv_50",
+                                     "BA_100","BA_500","BA_1000")]=
+          as.list(c(inv.1$inv_mean[[1]],
                inv.1$inv_max[[1]],
-               inv.2$inv_50[[1]])
+               inv.2$inv_50[[1]],
+               BA_t))
       }
-    }
   }
   
   return(out)
@@ -2303,6 +2428,27 @@ get_vitalrates_pars<-function(species_list.select,
   
 }
 
+
+#' Function to get basal area difference at equil simulations
+
+get_dif_ba<-function(disturbance_ba,
+                     species.list.ipm){
+  ba_dif<-disturbance_ba %>% 
+    pivot_longer(cols=matches(species.list.ipm)) %>% 
+    group_by(species,species_combination,clim_id) %>% 
+    mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
+                                 TRUE~0)) %>%
+    summarize(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
+              ba_target=sum(value*ba_multiple,na.rm = TRUE)) %>%
+    rowwise() %>% 
+    mutate(n_species=length(strsplit(species_combination,"\\.")[[1]])) %>% 
+    ungroup() %>% 
+    group_by(species,clim_id) %>% 
+    arrange(species,clim_id,n_species) %>% 
+    mutate(ba_dif=ba_target[1]-ba_target) %>% 
+    ungroup()
+  return(ba_dif)
+}
 
 get_list_pars<-function(fit.list.allspecies){
   list_pars_sp=vector("list",length = length(fit.list.allspecies))

@@ -31,8 +31,8 @@ species.combination.select<- tar_read(species.combination.select) %>%
   
 
 
-### analyse species exclusion ###
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### analyse species exclusion ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 species.combination.excl$smallcombi<-NA
 for(i in 1:dim(species.combination.excl)[1]){
   if(species.combination.excl$competexcluded[i]!=""){
@@ -104,11 +104,16 @@ invasion <- invasion_metric %>% ungroup() %>%
               values_from = value) %>% 
   dplyr::select(!matches(species.list.ipm))%>% 
   left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
- 
+
+# gather all data
+ba_dif<-tar_read(ba_dif) %>% 
+  select(!matches(c('ba_target',"ba_partner","n_species"))) %>% 
+  mutate(elast="Abies_alba-amean",vr="mean") 
 performance <-invasion %>% 
   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
+  left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>% 
   arrange(species,clim_id,species_combination,elast,vr) %>% 
-  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50"),
+  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50","ba_dif"),
                names_to="metric",
                values_to="metric_val") %>% 
   arrange(species,clim_id,elast,species_combination)%>% 
@@ -118,13 +123,19 @@ performance <-invasion %>%
                              TRUE~ba_target.y),
          rel_ba_partner=case_when(grepl("inv",metric)~rel_ba_partner.x,
                                   TRUE~rel_ba_partner.y)) %>% 
-  dplyr::select(!matches("\\.x")) %>% dplyr::select(!matches(".y")) %>% 
-  filter(excluded!="excluded") %>% 
-  filter(is.na(smallcombi)|smallcombi!="present")
+  dplyr::select(!matches("\\.x")) %>% dplyr::select(!matches(".y")) 
+  # filter(excluded!="excluded") %>% 
+  # filter(is.na(smallcombi)|smallcombi!="present")
 
 
 #### plots ####
 #%%%%%%%%%%%%%%
+
+# variation of ba_dif with relative competition of partners
+performance %>% 
+  filter(metric=="ba_dif") %>% 
+  ggplot(aes(rel_ba_partner,metric_val,color=excluded))+
+  geom_point()
 
 # variation of performances with climate and compet
 
@@ -135,18 +146,17 @@ performance %>%
   #                                 "Fagus_sylvatica","Fagus_sylvatica.Quercus_petraea",
   #                                 "Fagus_sylvatica.Pinus_sylvestris","Fagus_sylvatica.Quercus_robur")) %>%
   # filter(!metric%in%c("inv_max","inv_mean")) %>%
-  filter(metric=="recovery") %>% 
+  filter(metric=="ba_dif") %>%
   filter(vr=="mean") %>%
-  filter(species %in% gsub("_"," ",species.list.disturbance)) %>%   
   # group_by(species,species_combination,metric) %>% 
   # filter(n()>8) %>%
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
+  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
-  scale_color_gradientn(colours = viridis(15),trans="log")+
+  scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
-  facet_wrap(species~metric,scale="free",ncol=4)+
+  facet_wrap(metric~species,scale="free_y",ncol=5)+
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
@@ -240,16 +250,6 @@ performance %>%
        color="Type of performance")
 
 
-# model test
-performance %>% 
-  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(vr=="mean") %>% 
-  # filter(species=="Abies alba") %>% 
-  filter(metric=="inv_50")->data.test
-data.test %>% ggplot(aes(ba_partner,metric_val,color=pca1))+geom_point()+facet_wrap(~species)+scale_color_gradientn(colours = viridis(n=11))
-summary(lmer(metric_val~(1|species)+pca1*ba_partner,data=data.test))
-
-
 # Each metric as fonction of competition, clim is color 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
@@ -264,3 +264,23 @@ performance %>%
   facet_wrap(species~metric,scales="free_y",ncol=4)
 
 
+
+#### model test ####
+#%%%%%%%%%%%%%%%%%%%
+
+# test effect of competition
+data.compet<- performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(metric=="resilience") %>% 
+  group_by(species) %>% 
+  mutate(ba_tot=ba_target+ba_partner,
+         ba_tot=scale(ba_tot,scale=TRUE)) 
+summary(lmer(ba_tot~pca1+(pca1|species),data=data.compet))
+
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(vr=="mean") %>% 
+  # filter(species=="Abies alba") %>% 
+  filter(metric=="inv_50")->data.test
+data.test %>% ggplot(aes(ba_partner,metric_val,color=pca1))+geom_point()+facet_wrap(~species)+scale_color_gradientn(colours = viridis(n=11))
+summary(lmer(metric_val~(1|species)+(1|species:species_combination)+pca1*ba_partner,data=data.test))
