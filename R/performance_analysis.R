@@ -10,6 +10,9 @@ library(lme4)
 tar_load(species.list.ipm)
 tar_load(species.list.disturbance)
 
+traits<-read.csv("data/traits_complete.csv") %>% 
+  select(species,shade) %>% 
+  mutate(species=gsub(" ","_",species))
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
   group_by(species,clim_id) %>% 
@@ -68,61 +71,76 @@ disturbance_metric<-tar_read(disturbance_ba) %>%
   dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
 invasion_metric<-tar_read(invasion_ba) %>% 
   mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
-  dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,matches(species.list.ipm)) 
+  dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm)) 
 
 
 # compute mean elasticity per vital rates, for each species combi/clim
 disturbance <- disturbance_metric %>% 
   arrange(species,clim_id,species_combination,elast) %>% 
   pivot_longer(cols=matches(species.list.ipm)) %>% 
+  left_join(traits, by = c("name" = "species")) %>% 
   group_by(species,elast,species_combination,clim_id,vr) %>% 
   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
                                TRUE~0)) %>% 
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
-         rel_ba_partner=ba_partner/(ba_target+ba_partner)) %>% 
+         rel_ba_partner=ba_partner/(ba_target+ba_partner),
+         nih=sum((sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner,
+         nid=sum(abs(sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner) %>% 
   ungroup() %>% 
-  dplyr::select(-ba_multiple) %>% 
+  dplyr::select(-c("ba_multiple","shade")) %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
   dplyr::select(!matches(species.list.ipm)) 
 invasion <- invasion_metric %>% ungroup() %>% 
   arrange(species,species_combination,clim_id) %>% 
   pivot_longer(cols=matches(species.list.ipm)) %>% 
+  left_join(traits, by = c("name" = "species")) %>% 
   group_by(species,elast,species_combination,clim_id,vr) %>% 
   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
-                               TRUE~0)) %>% 
+                               TRUE~0),
+         value=case_when(!is.na(value)~1,
+                         gsub("_"," ",name)==species~1,
+                         TRUE~value)) %>%  # *1 because invasion are made at constant basal area of compet
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
          ba_target=sum(value*ba_multiple,na.rm = TRUE),
          rel_ba_partner=if_else(ba_partner!=0,
                                 ba_partner/(ba_target+ba_partner),
-                                0)) %>% 
+                                0),
+         nih=sum((sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner, 
+         nid=sum(abs(sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner) %>% 
   
   ungroup() %>% 
-  dplyr::select(-ba_multiple) %>% 
+  dplyr::select(-c("ba_multiple","shade")) %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
   dplyr::select(!matches(species.list.ipm))%>% 
   left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
-
-# gather all data
 ba_dif<-tar_read(ba_dif) %>% 
   select(!matches(c('ba_target',"ba_partner","n_species"))) %>% 
   mutate(elast="Abies_alba-amean",vr="mean") 
+
+
+# gather all data
 performance <-invasion %>% 
   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
   left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>% 
   arrange(species,clim_id,species_combination,elast,vr) %>% 
-  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max","inv_50","ba_dif"),
+  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max",
+                      "inv_50","BA_100","BA_500","BA_1000","ba_dif"),
                names_to="metric",
                values_to="metric_val") %>% 
   arrange(species,clim_id,elast,species_combination)%>% 
-  mutate(ba_partner=case_when(grepl("inv",metric)~ba_partner.x,
+  mutate(ba_partner=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~ba_partner.x,
                               TRUE~ba_partner.y),
-         ba_target=case_when(grepl("inv",metric)~ba_target.x,
+         ba_target=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~ba_target.x,
                              TRUE~ba_target.y),
-         rel_ba_partner=case_when(grepl("inv",metric)~rel_ba_partner.x,
-                                  TRUE~rel_ba_partner.y)) %>% 
+         rel_ba_partner=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~rel_ba_partner.x,
+                                  TRUE~rel_ba_partner.y),
+         nih=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~nih.x,
+                       TRUE~nih.y),
+         nid=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~nid.x,
+                       TRUE~nid.y)) %>% 
   dplyr::select(!matches("\\.x")) %>% dplyr::select(!matches(".y")) 
   # filter(excluded!="excluded") %>% 
   # filter(is.na(smallcombi)|smallcombi!="present")
@@ -136,6 +154,13 @@ performance %>%
   filter(metric=="ba_dif") %>% 
   ggplot(aes(rel_ba_partner,metric_val,color=excluded))+
   geom_point()
+
+# covariations in inv performances
+invasion %>% 
+  ggplot(aes(BA_500,inv_50,color=species))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)
+confint(lmer(inv_50~(1|species)+BA_100,data=invasion))
 
 # variation of performances with climate and compet
 
@@ -152,7 +177,7 @@ performance %>%
   # filter(n()>8) %>%
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=1)+
+  geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
