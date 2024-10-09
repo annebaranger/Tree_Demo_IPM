@@ -88,16 +88,16 @@ mean_trait$WD<-wooddensity$WD
 imputed_data <- mice(mean_trait, method = 'pmm', m = 5, maxit = 50, seed = 500)
 trait_complete <- complete(imputed_data, 1)  # '1' refers to the first imputed dataset
 
-imputed_data_cf <- mice(mean_trait[mean_trait$taxa=="conifer",], method = 'pmm', m = 5, maxit = 50, seed = 500)
-trait_complete_cf <- complete(imputed_data_cf, 1)  # '1' refers to the first imputed dataset
-
-trait_complete<-rbind(trait_complete_br,trait_complete_cf)
-pca_trait<- prcomp(trait_complete[,c("WD","HM","shade")], center = TRUE, scale = TRUE)
+# imputed_data_cf <- mice(mean_trait[mean_trait$taxa=="conifer",], method = 'pmm', m = 5, maxit = 50, seed = 500)
+# trait_complete_cf <- complete(imputed_data_cf, 1)  # '1' refers to the first imputed dataset
+# 
+# trait_complete<-rbind(trait_complete_br,trait_complete_cf)
+pca_trait<- prcomp(trait_complete[,c("WD","HM")], center = TRUE, scale = TRUE)
 library(factoextra)
 fviz_pca_var(pca_trait, repel = TRUE)
 
 
-load("data/try/seedTraits.rdata")
+# load("data/try/seedTraits.rdata")
 
 
 trait_complete$pca1=pca_trait$x[,1]

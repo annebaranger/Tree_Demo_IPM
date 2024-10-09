@@ -11,8 +11,9 @@ tar_load(species.list.ipm)
 tar_load(species.list.disturbance)
 
 traits<-read.csv("data/traits_complete.csv") %>% 
-  select(species,shade) %>% 
-  mutate(species=gsub(" ","_",species))
+  select(species,pca1) %>% 
+  mutate(species=gsub(" ","_",species)) %>% 
+  rename(shade=pca1)
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
   group_by(species,clim_id) %>% 
@@ -185,6 +186,24 @@ performance %>%
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
+
+
+
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(metric=="BA_1000") %>%
+  filter(vr=="mean") %>%
+  filter(clim_id%in%c(1,5,10)) %>% 
+  ggplot() +
+  geom_line(aes(nid,metric_val, group=clim_id),color="grey")+
+  geom_point(aes(nid,metric_val,color=pca1, group=interaction(elast,species_combination)),size=1)+
+  geom_hline(yintercept = 0)+
+  scale_color_gradientn(colours = viridis(15))+
+  theme_bw()+
+  facet_wrap(metric~species,scale="free_y",ncol=5)+
+  labs(
+       y="Performance",
+       color="Climate")
 
 # explore effect variation of competition with cliamte
 performance %>% 
