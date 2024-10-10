@@ -185,6 +185,7 @@ list(
   # -- Make mean simulations ----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
+  
   # simulation until equilibrium
   tar_target(sim_equil.id,
              sim_forest_list$id.simul_eq),#1:dim(species.combination)[1]),
@@ -350,6 +351,18 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%
   # -- Make analysis ----
   #%%%%%%%%%%%%%%%%%%%%%%
+  
+  #' 0. Mean demography of species
+  tar_target(mean_demo,
+             make_mean_simul(species.list.ipm,
+                             climate.cat,
+                             species_object=species_object_mu,
+                             species_list=species_list.select,
+                             fit.list.allspecies,
+                             harv_rules.ref,
+                             sp_id=species.obj.mu.id),
+             pattern=map(species.obj.mu.id),
+             iteration="vector"),
   
   #' 1. Compute invasion rate
   tar_target(invasion_metric,

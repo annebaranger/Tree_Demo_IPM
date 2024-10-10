@@ -466,7 +466,7 @@ make_clim_boundaries <- function(species.combination){
       sgddb = c(1/sgdd_min, 1/sgdd_med, 1/sgdd_max),
       wai = c(wai_max, wai_med, wai_min),
       wai2 = c(wai_max^2, wai_med^2, wai_min^2),
-      waib = c(1/wai_max, 1/wai_med, 1/wai_min)
+      waib = c(1/wai_max, 1/wai_med, 1/wai_min) # errueur ici!!!
     )
     out<-rbind(out,
                new_rows)
@@ -2027,9 +2027,125 @@ disturb_fun <- function(x, species, disturb = NULL, ...){
   return(x* Pkill) # always return the mortality distribution
 }
 
+# 
+# tar_load(c(species.list.ipm,
+#            climate.cat))
+# species_object=tar_read(species_object_mu)
+# species_list=tar_read(species_list.select)
+# tar_load(c(fit.list.allspecies,
+#            harv_rules.ref))
+# sp_id=7
+make_mean_simul<-function(species.list.ipm,
+                          climate.cat,
+                          species_object,
+                          species_list,
+                          fit.list.allspecies,
+                          harv_rules.ref,
+                          sp_id){
+  print(sp_id)
+  s_p=species.list.ipm[sp_id]
+  sp=gsub("_"," ",s_p)
+  
+  # get mean climate
+  climate.cat=climate.cat$species.cat
+  clim=apply(climate.cat[climate.cat$species==sp&
+                     climate.cat$clim_id%in%c(5,6),c("wai","sgdd")],
+             MARGIN=2,
+             mean)
+  clim=data.frame(sgdd=clim[["sgdd"]],
+                  wai=clim[["wai"]]) %>% 
+    mutate(sgddb=1/sgdd,
+           waib=1/(1+wai),
+           wai2=wai^2,
+           sgdd2=sgdd^2
+           )
+  # 
+  # species.combination[id_forest,c("sgdd", "wai", "sgddb",
+  #                                 "waib", "wai2", "sgdd2", 
+  #                                 "PC1", "PC2", "N", "SDM")]
+  # get species mu
+  id_obj=species_list %>% 
+    filter(species_combination==s_p) %>% 
+    dplyr::select(id.species.mu.obj) %>% 
+    unique() %>% pull(id.species.mu.obj)
+  
+  species_mu<-readRDS(species_object[id_obj])
+  list.species<- list(species_mu)
+  names(list.species)<-s_p
 
-
-
+  # create forest
+  forest.in = new_forest(species = list.species,
+                         harv_rules = harv_rules.ref)
+  
+  # launch equil sim
+  sim.in = sim_deter_forest(forest.in, 
+                            tlim = 4000,
+                            climate=clim,
+                            equil_time = 50000, 
+                            equil_dist = 2000, 
+                            equil_diff = 0.5, 
+                            harvest = "default", 
+                            SurfEch = 0.03,
+                            verbose = TRUE)
+  
+  reached_equil = ifelse(
+    is.na(sum((sim.in %>%
+                 filter(var == "BAsp") %>%
+                 filter(time == max(.$time) - 1))$value)), 
+    FALSE, TRUE
+  )
+  distrib_equil = sim.in %>%
+    filter(var == "n", equil)
+  ba_equil<-sim.in %>%
+    filter(var == "BAsp", equil)
+  
+  # launch invasion sim
+  lag.i = distrib_equil %>%
+    filter(size==0) %>%
+    pull(value)
+  rec.i = distrib_equil %>%
+    filter(size>0) %>%
+    mutate(value=case_when(size>200~0,
+                           TRUE~value)) |>
+    mutate(BAtot=sum((size/2000)^2*pi*value),
+           value_2=(value*1)/BAtot,
+           BAtot=sum((size/2000)^2*pi*value_2)) |> 
+    pull(value_2)
+  equil.i=c(lag.i,rec.i)
+  equil.i[is.nan(equil.i)]<-0
+  
+  
+  ## Initiate the population at equilibrium
+  list.species[[1]]$init_pop <- def_init_k(equil.i)
+  
+  
+  forest.inv = new_forest(species = list.species, harv_rules = harv_rules.ref)
+  
+  sim.inv = sim_deter_forest(forest.inv, 
+                            tlim = 100,
+                            climate=clim,
+                            equil_time = 1000, 
+                            equil_dist = 50, 
+                            equil_diff = 0.5, 
+                            harvest = "default", 
+                            SurfEch = 0.03,
+                            verbose = TRUE)
+  delay.i<-as.numeric(fit.list.allspecies[[s_p]]$info[["delay"]])
+  derivative.i <- sim.inv |> 
+    filter(var=="BAsp",time>delay.i) |> 
+    mutate(der=(value-lag(value))/(time-lag(time)),
+           der2=(der-lag(der))/(time-lag(time))) %>% 
+    filter(time<delay.i+50) |> 
+    summarise(inv_50=mean(der,na.rm=TRUE))
+  
+  out<-data.frame(species=sp,
+             ba_equil=ba_equil$value,
+             inv_50=derivative.i$inv_50) %>% 
+    cbind(clim)
+  return(out)
+}
+  
+  
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### POST SIMULATION ANALYSIS ####
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

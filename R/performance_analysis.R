@@ -10,10 +10,25 @@ library(lme4)
 tar_load(species.list.ipm)
 tar_load(species.list.disturbance)
 
-traits<-read.csv("data/traits_complete.csv") %>% 
-  select(species,pca1) %>% 
-  mutate(species=gsub(" ","_",species)) %>% 
-  rename(shade=pca1)
+## get demo traits
+# tar_load(mean_demo)
+
+# pca=prcomp(mean_demo[,c("inv_50","ba_equil")],scale=TRUE,center=TRUE)
+# factoextra::fviz_pca_var(pca)
+
+# mean_demo$pca1<-pca$x[,1]
+# 
+# 
+traits<-read.csv("data/traits_complete.csv") %>%
+  select(species,shade) %>%
+  mutate(species=gsub(" ","_",species)) %>%
+  rename(shade=shade)
+
+# traits<-mean_demo %>% 
+#   select(species,inv_50) %>% 
+#   mutate(species=gsub(" ","_",species)) %>%
+#   rename(shade=pca1)
+  
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
   group_by(species,clim_id) %>% 
@@ -146,7 +161,6 @@ performance <-invasion %>%
   # filter(excluded!="excluded") %>% 
   # filter(is.na(smallcombi)|smallcombi!="present")
 
-
 #### plots ####
 #%%%%%%%%%%%%%%
 
@@ -167,48 +181,31 @@ confint(lmer(inv_50~(1|species)+BA_100,data=invasion))
 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  # filter(species_combination%in%c("Abies_alba","Abies_alba.Picea_abies","Abies_alba.Fagus_sylvatica",
-  #                                 "Abies_alba.Picea_abies.Pinus_sylvestris",
-  #                                 "Fagus_sylvatica","Fagus_sylvatica.Quercus_petraea",
-  #                                 "Fagus_sylvatica.Pinus_sylvestris","Fagus_sylvatica.Quercus_robur")) %>%
-  # filter(!metric%in%c("inv_max","inv_mean")) %>%
-  filter(metric=="ba_dif") %>%
+  filter(metric=="resilience") %>%
+  filter(species%in% c("Abies alba","Carpinus betulus","Fagus sylvatica","Fraxinus excelsior",
+                       "Picea abies","Quercus ilex","Quercus petraea","Quercus robur")) %>%
   filter(vr=="mean") %>%
-  # group_by(species,species_combination,metric) %>% 
-  # filter(n()>8) %>%
+  filter(is.na(smallcombi)|smallcombi=="absent") %>% 
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca1,metric_val,color=rel_ba_partner, group=interaction(elast,species_combination)),size=1)+
+  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
-  facet_wrap(metric~species,scale="free_y",ncol=5)+
+  facet_wrap(metric~species,ncol=4)+
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
 
 
 
-performance %>% 
-  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(metric=="BA_1000") %>%
-  filter(vr=="mean") %>%
-  filter(clim_id%in%c(1,5,10)) %>% 
-  ggplot() +
-  geom_line(aes(nid,metric_val, group=clim_id),color="grey")+
-  geom_point(aes(nid,metric_val,color=pca1, group=interaction(elast,species_combination)),size=1)+
-  geom_hline(yintercept = 0)+
-  scale_color_gradientn(colours = viridis(15))+
-  theme_bw()+
-  facet_wrap(metric~species,scale="free_y",ncol=5)+
-  labs(
-       y="Performance",
-       color="Climate")
+# see impact of different community composition on
+
 
 # explore effect variation of competition with cliamte
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(metric=="inv_50") %>% #select one metric only with equil ba
+  filter(metric=="resilience") %>% #select one metric only with equil ba
   filter(vr=="mean") %>% 
   group_by(species,species_combination) %>% 
   filter(n()>4) %>%
@@ -294,6 +291,8 @@ performance %>%
        color="Type of performance")
 
 
+
+
 # Each metric as fonction of competition, clim is color 
 performance %>% 
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
@@ -309,6 +308,61 @@ performance %>%
 
 
 
+
+### Analysis of resilience ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# figure that helps
+performance %>% 
+  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
+  filter(metric=="resilience") %>%
+  filter(species%in% c("Abies alba","Carpinus betulus","Fagus sylvatica","Fraxinus excelsior",
+                       "Picea abies","Quercus ilex","Quercus petraea","Quercus robur")) %>%
+  filter(vr=="mean") %>%
+  filter(is.na(smallcombi)|smallcombi=="absent") %>%
+  ggplot() +
+  geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
+  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=1)+
+  geom_hline(yintercept = 0)+
+  scale_color_gradientn(colours = viridis(15))+
+  theme_bw()+
+  facet_wrap(metric~species,ncol=4)+
+  labs(x="PCA first axis (cold/wet -> hot/dry)",
+       y="Performance",
+       color="Total basal area of competitors")
+
+# analysis of species exclusion
+data_exclu<-performance %>% 
+  filter(metric=="resilience") %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
+  mutate(species=forcats::fct_reorder(species, shade),
+         simul_state=case_when(!is.na(smallcombi)~"CompetitorExclusion",
+                               excluded=="excluded"~"SpeciesExclusion",
+                               TRUE~"SpeciesCoex")) %>% 
+  group_by(species,clim_id) %>% 
+  mutate(n_comb=n()) %>% 
+  group_by(species,clim_id,simul_state) %>% 
+  mutate(prop=n()/n_comb,
+         nih_mean=mean(nih,na.rm=TRUE)) %>% 
+  dplyr::select(species,clim_id,simul_state,n_comb,prop,nih_mean,shade) %>% unique() %>% 
+  ungroup() 
+data_exclu%>% 
+  ggplot(aes(clim_id,prop,fill=simul_state))+
+  geom_col()+
+  facet_wrap(~species)
+
+
+performance %>% 
+  filter(metric=="resilience") %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
+  group_by(species) %>% 
+  mutate(nih_mean=mean(nih,na.rm=TRUE)) %>% 
+  dplyr::select(species,nih_mean,shade) %>% unique() %>% 
+  ungroup() %>% ggplot(aes(shade,nih_mean))+geom_point()+geom_smooth()
+model=lm(prop~clim_id*nih_mean+clim_id:species,data=subset(data_exclu,simul_state=="CompetitorExclusion"))
+summary(model)
+model$model
+  
 #### model test ####
 #%%%%%%%%%%%%%%%%%%%
 
