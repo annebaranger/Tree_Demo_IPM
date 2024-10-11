@@ -2561,7 +2561,7 @@ get_dif_ba<-function(disturbance_ba,
     ungroup() %>% 
     group_by(species,clim_id) %>% 
     arrange(species,clim_id,n_species) %>% 
-    mutate(ba_dif=ba_target[1]-ba_target) %>% 
+    mutate(ba_dif=ba_target/ba_target[1]) %>% 
     ungroup()
   return(ba_dif)
 }
