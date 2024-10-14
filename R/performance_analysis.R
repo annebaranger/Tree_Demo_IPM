@@ -17,18 +17,16 @@ pca=prcomp(mean_demo[,c("inv_50","ba_equil")],scale=TRUE,center=TRUE)
 factoextra::fviz_pca_var(pca)
 
 mean_demo$pca1<-pca$x[,1]
-#
-#
-# traits<-read.csv("data/traits_complete.csv") %>%
-#   select(species,shade) %>%
-#   mutate(species=gsub(" ","_",species)) %>%
-#   rename(shade=shade)
 
-traits<-mean_demo %>%
-  select(species,inv_50) %>%
+traits<-read.csv("data/traits_complete.csv") %>%
+  select(species,shade) %>%
   mutate(species=gsub(" ","_",species)) %>%
-  rename(shade=inv_50)
-  
+  rename(shade=shade) %>% 
+  left_join(mean_demo[,c("species","ba_equil","inv_50","pca1")] %>% 
+              mutate(species=gsub(" ","_",species))) %>% 
+  rename(inv_sp=inv_50)
+
+
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
   group_by(species,clim_id) %>% 
@@ -100,13 +98,19 @@ disturbance <- disturbance_metric %>%
   group_by(species,elast,species_combination,clim_id,vr) %>% 
   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
                                TRUE~0)) %>% 
+  pivot_longer(cols=colnames(traits)[-1],
+               values_to = "trait_val",
+               names_to = "trait_name") %>% 
+  group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
          rel_ba_partner=ba_partner/(ba_target+ba_partner),
-         nih=sum((sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner,
-         nid=sum(abs(sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner) %>% 
+         nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
+         nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
   ungroup() %>% 
-  dplyr::select(-c("ba_multiple","shade")) %>% 
+  dplyr::select(-c("ba_multiple","trait_val")) %>%
+  pivot_wider(values_from = c("nih","nid"),
+              names_from = "trait_name") %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
   dplyr::select(!matches(species.list.ipm)) 
@@ -120,16 +124,19 @@ invasion <- invasion_metric %>% ungroup() %>%
          value=case_when(!is.na(value)~1,
                          gsub("_"," ",name)==species~1,
                          TRUE~value)) %>%  # *1 because invasion are made at constant basal area of compet
+  pivot_longer(cols=colnames(traits)[-1],
+               values_to = "trait_val",
+               names_to = "trait_name") %>% 
+  group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-         ba_target=sum(value*ba_multiple,na.rm = TRUE),
-         rel_ba_partner=if_else(ba_partner!=0,
-                                ba_partner/(ba_target+ba_partner),
-                                0),
-         nih=sum((sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner, 
-         nid=sum(abs(sum(shade*ba_multiple)-shade)*value,na.rm=TRUE)/ba_partner) %>% 
-  
+         ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+         rel_ba_partner=ba_partner/(ba_target+ba_partner),
+         nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
+         nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
   ungroup() %>% 
-  dplyr::select(-c("ba_multiple","shade")) %>% 
+  dplyr::select(-c("ba_multiple","trait_val")) %>%
+  pivot_wider(values_from = c("nih","nid"),
+              names_from = "trait_name") %>% 
   pivot_wider(names_from = name,
               values_from = value) %>% 
   dplyr::select(!matches(species.list.ipm))%>% 
@@ -149,17 +156,16 @@ performance <-invasion %>%
                names_to="metric",
                values_to="metric_val") %>% 
   arrange(species,clim_id,elast,species_combination)%>% 
-  mutate(ba_partner=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~ba_partner.x,
-                              TRUE~ba_partner.y),
-         ba_target=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~ba_target.x,
-                             TRUE~ba_target.y),
-         rel_ba_partner=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~rel_ba_partner.x,
-                                  TRUE~rel_ba_partner.y),
-         nih=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~nih.x,
-                       TRUE~nih.y),
-         nid=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~nid.x,
-                       TRUE~nid.y)) %>% 
-  dplyr::select(!matches("\\.x")) %>% dplyr::select(!matches(".y")) 
+  pivot_longer(cols=matches("\\.x|\\.y")) %>% 
+  mutate(name_upd=gsub("\\.x$|\\.y$", "", name),
+         name=str_sub(name,-1)) %>% 
+  pivot_wider(names_from = name,
+              values_from = value) %>% 
+  mutate(compet_val=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~x,
+                              TRUE~y)) %>% 
+  select(-c("x","y")) %>% 
+  pivot_wider(names_from = name_upd,
+              values_from = compet_val)
   # filter(excluded!="excluded") %>% 
   # filter(is.na(smallcombi)|smallcombi!="present")
 
@@ -311,8 +317,8 @@ performance %>%
 
 
 
-### Maintainance ####
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Coexistence ####
+#%%%%%%%%%%%%%%%%%%%
 
 # figure that helps
 
@@ -328,7 +334,7 @@ data_exclu<-performance %>%
   mutate(n_comb=n()) %>% 
   group_by(species,clim_id,simul_state) %>% 
   mutate(prop=n()/n_comb,
-         nih_mean=mean(nih,na.rm=TRUE)) %>% 
+         nih_mean=mean(nih_shade,na.rm=TRUE)) %>% 
   dplyr::select(species,clim_id,simul_state,n_comb,prop,nih_mean,shade) %>% unique() %>% 
   ungroup() 
 data_exclu%>% 
@@ -342,11 +348,14 @@ summary(model)
 model$model
 
 
+### Maintainance ####
+#%%%%%%%%%%%%%%%%%%%%
+
 ## fit a glm on ba_dif metric
-data_exclu<-performance %>% 
+data_maint<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="ba_dif") %>% 
-  filter(!is.nan(nih)) %>% 
+  filter(!is.nan(nih_shade)) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
   mutate(species=forcats::fct_reorder(species, shade),
          simul_state=case_when(!is.na(smallcombi)~"CompetitorExclusion",
@@ -354,27 +363,27 @@ data_exclu<-performance %>%
                                TRUE~"SpeciesCoex"),
          metric_val=case_when(metric_val>1~1,
                               TRUE~metric_val),
-         metric_val_2=(metric_val * (dim(data_exclu)[1] - 1) + 0.5) / dim(data_exclu)[1]) 
+         metric_val=(metric_val * (dim(data_maint)[1] - 1) + 0.5) / dim(data_maint)[1]) 
 
-data_exclu %>% 
-  filter(!is.nan(nih)) %>% 
+data_maint %>% 
+  filter(!is.nan(nih_shade)) %>% 
   # filter(clim_id%in%c(1,5,10)) %>%
   # filter(species=="Fagus sylvatica") %>% View()
-  ggplot(aes(pca_sc,metric_val_2,color=nih))+
+  ggplot(aes(pca_sc,metric_val,color=nih_shade))+
   geom_point()+
   geom_smooth(method="lm",se=FALSE)+
   facet_wrap(~species)
-data_exclu %>% 
-  filter(!is.nan(nih)) %>% 
-  ggplot(aes(pca_sc,nih))+
+data_maint %>% 
+  filter(!is.nan(nih_shade)) %>% 
+  ggplot(aes(pca_sc,nih_shade))+
   geom_point()+
   geom_smooth(method="gam",se=FALSE)
 
 
 library(glmmTMB)
 library(effects)
-model <- glmmTMB(metric_val_2 ~ pca_sc * nih + I(pca_sc^2) * nih + (nih | species),#+ (nih | species)
-                 data = data_exclu,
+model <- glmmTMB(metric_val ~ pca_sc * nih_shade + I(pca_sc^2) * nih_shade + (nih_shade | species),#+ (nih | species)
+                 data = data_maint,
                  family = beta_family(link = "logit"))
 
 # Simulate residuals
@@ -386,11 +395,11 @@ plot(sim_res)
 # draw effects
 summary(model)
 ae<-allEffects(model)
-as.data.frame(ae$`pca_sc:nih`) %>% 
-  filter(nih%in%c(-2,-0.1,3)) %>% 
+as.data.frame(ae$`pca_sc:nih_shade`) %>% 
+  filter(nih_shade%in%c(-2,-0.1,3)) %>% 
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(nih)))+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih_shade)),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=as.factor(nih_shade)))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   labs(x="Relative niche of species (cold/humid -> hot/dry)",
@@ -412,19 +421,26 @@ performance %>%
   left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
   filter(metric=="resilience") %>%
   filter(vr=="mean") %>%
+  # filter(species==gsub("_"," ",species_combination)) %>% 
   filter(is.na(smallcombi)|smallcombi=="absent") %>%
-  filter(species%in% c("Abies alba","Carpinus betulus","Fagus sylvatica","Fraxinus excelsior",
-                       "Picea abies","Quercus ilex","Quercus petraea","Quercus robur")) %>%
+  mutate(metric_val=ba_target*metric_val) %>% 
+  mutate(ba_partner=case_when(ba_partner==0~NA,
+                              TRUE~ba_partner)) %>% 
+  # filter(species%in% c("Abies alba","Carpinus betulus","Fagus sylvatica","Fraxinus excelsior",
+  #                      "Picea abies","Quercus ilex","Quercus petraea","Quercus robur")) %>%
   ggplot() +
   geom_line(aes(pca1,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=1)+
+  geom_point(aes(pca1,metric_val,color=ba_partner, group=interaction(elast,species_combination)),size=3)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
-  facet_wrap(metric~species,ncol=4)+
+  facet_wrap(metric~species,ncol=4,scales = "free")+
   labs(x="PCA first axis (cold/wet -> hot/dry)",
        y="Performance",
        color="Total basal area of competitors")
+
+
+
 
 data_resilience<- performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
@@ -463,13 +479,23 @@ summary(model2)
 data_inv<- performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="inv_50") %>% 
-  mutate(nih=case_when(is.nan(nih)~0,
-                       TRUE~nih)) %>% 
+  rowwise() %>% 
+  mutate(n_species=length(strsplit(species_combination,"\\.")[[1]])) %>% 
+  ungroup() %>% 
+  group_by(species,clim_id) %>% 
+  arrange(species,clim_id,n_species) %>% 
+  mutate(inv_dif=metric_val/metric_val[1]) %>% 
+  ungroup() %>% 
+  mutate(nih=case_when(is.nan(nid_pca1)~0,
+                       TRUE~nid_pca1),
+         inv_dif=case_when(inv_dif<0~0,
+                           TRUE~inv_dif),
+         inv_dif=(inv_dif * (dim(data_maint)[1] - 1) + 0.5) / dim(data_maint)[1]) %>% 
   filter(!species%in%c("Pinus pinaster","Pinus pinea"))
 
 ggplot(data_inv) +
-  geom_line(aes(pca_sc,metric_val, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca_sc,metric_val,color=nih, group=interaction(elast,species_combination)),size=1)+
+  geom_line(aes(pca_sc,inv_dif, group=interaction(elast,species_combination)),color="grey")+
+  geom_point(aes(pca_sc,inv_dif,color=nih, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
@@ -478,8 +504,11 @@ ggplot(data_inv) +
        y="Performance",
        color="Total basal area of competitors")
 
+model3 <- glmmTMB(inv_dif ~ pca_sc * nih + I(pca_sc^2) * nih + (nih | species),#+ (nih | species)
+                 data = data_maint,
+                 family = beta_family(link = "logit"))
 
-model3 <- lmer(metric_val ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
+model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
                data = data_inv)
 # Simulate residuals
 library(DHARMa)
@@ -489,14 +518,16 @@ plot(sim_res)
 
 ae3<-allEffects(model3)
 as.data.frame(ae3$`pca_sc:nih`) %>% 
-  filter(nih%in%c(-0.4,-0.01,0.4)) %>% 
+  # filter(nih%in%c(-0.4,-0.01,0.4)) %>% 
+  # filter(nih%in%c(0,0.2,0.4)) %>%
+  filter(nih%in%c(0,3,5)) %>%
   ggplot()+
   geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih)),alpha=0.2)+
   geom_line(aes(pca_sc,fit,color=as.factor(nih)))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="BA at equilibrium / BA of pure stand",
+       y="Invasion rate on 50 first years",
        color="Competitive hierarchy",
        fill="Competitive hierarchy")+
   theme_classic()
