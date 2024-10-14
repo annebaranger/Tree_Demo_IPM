@@ -1,10 +1,14 @@
-library(targets)
+{library(targets)
 library(tidyr)
 library(dplyr)
 library(stringr)
 library(ggplot2)
 library(viridis)
 library(lme4)
+library(glmmTMB)
+library(effects)
+library(DHARMa)
+
 #### Load basic data ####
 #%%%%%%%%%%%%%%%%%%%%%%%
 tar_load(species.list.ipm)
@@ -48,126 +52,129 @@ species.combination.select<- tar_read(species.combination.select) %>%
   dplyr::select(species,species_combination,n_species,excluded,competexcluded,
                 clim_id,pca1,pca2,wai,sgdd,clim_up,clim_low) 
   
-
-
-#### Species exclusion ####
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-species.combination.excl$smallcombi<-NA
-for(i in 1:dim(species.combination.excl)[1]){
-  if(species.combination.excl$competexcluded[i]!=""){
-    s_p=gsub(" ","_",species.combination.excl$species[i])
-    sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
-    # sp_combi=sp_combi[sp_combi!=s_p]
-    sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
-    
-    new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
-    ex<-species.combination.excl %>% 
-      filter(species==species.combination.excl$species[i]&
-               clim_id==species.combination.excl$clim_id[i]&
-               species_combination==new_combi)
-    if(dim(ex)[1]==1){
-      species.combination.excl$smallcombi[i]="present"
-    }else{
-      species.combination.excl$smallcombi[i]="absent"
-    }
-  }
-  
+load("performance.RData")
 }
-# for checking the proportion of combination represented after species exclusion
-# species.combination.excl %>% 
-#   filter(competexcluded!="") %>% 
-#   filter(smallcombi=="absent") 
 
-#### Performance metrics ####
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# #### Species exclusion ####
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# species.combination.excl$smallcombi<-NA
+# for(i in 1:dim(species.combination.excl)[1]){
+#   if(species.combination.excl$competexcluded[i]!=""){
+#     s_p=gsub(" ","_",species.combination.excl$species[i])
+#     sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
+#     # sp_combi=sp_combi[sp_combi!=s_p]
+#     sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
+#     
+#     new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
+#     ex<-species.combination.excl %>% 
+#       filter(species==species.combination.excl$species[i]&
+#                clim_id==species.combination.excl$clim_id[i]&
+#                species_combination==new_combi)
+#     if(dim(ex)[1]==1){
+#       species.combination.excl$smallcombi[i]="present"
+#     }else{
+#       species.combination.excl$smallcombi[i]="absent"
+#     }
+#   }
+#   
+# }
+# # for checking the proportion of combination represented after species exclusion
+# # species.combination.excl %>% 
+# #   filter(competexcluded!="") %>% 
+# #   filter(smallcombi=="absent") 
+# 
+# #### Performance metrics ####
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# 
+# # get disturbance metrics from mean 
+# disturbance_metric<-tar_read(disturbance_ba) %>% 
+#   mutate(elast="Abies_alba-amean",vr="mean") %>%
+#   dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
+# invasion_metric<-tar_read(invasion_ba) %>% 
+#   mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
+#   dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm)) 
+# 
+# 
+# # compute mean elasticity per vital rates, for each species combi/clim
+# disturbance <- disturbance_metric %>% 
+#   arrange(species,clim_id,species_combination,elast) %>% 
+#   pivot_longer(cols=matches(species.list.ipm)) %>% 
+#   left_join(traits, by = c("name" = "species")) %>% 
+#   group_by(species,elast,species_combination,clim_id,vr) %>% 
+#   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
+#                                TRUE~0)) %>% 
+#   pivot_longer(cols=colnames(traits)[-1],
+#                values_to = "trait_val",
+#                names_to = "trait_name") %>% 
+#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
+#   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
+#          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+#          rel_ba_partner=ba_partner/(ba_target+ba_partner),
+#          nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
+#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
+#   ungroup() %>% 
+#   dplyr::select(-c("ba_multiple","trait_val")) %>%
+#   pivot_wider(values_from = c("nih","nid"),
+#               names_from = "trait_name") %>% 
+#   pivot_wider(names_from = name,
+#               values_from = value) %>% 
+#   dplyr::select(!matches(species.list.ipm)) 
+# invasion <- invasion_metric %>% ungroup() %>% 
+#   arrange(species,species_combination,clim_id) %>% 
+#   pivot_longer(cols=matches(species.list.ipm)) %>% 
+#   left_join(traits, by = c("name" = "species")) %>% 
+#   group_by(species,elast,species_combination,clim_id,vr) %>% 
+#   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
+#                                TRUE~0),
+#          value=case_when(!is.na(value)~1,
+#                          gsub("_"," ",name)==species~1,
+#                          TRUE~value)) %>%  # *1 because invasion are made at constant basal area of compet
+#   pivot_longer(cols=colnames(traits)[-1],
+#                values_to = "trait_val",
+#                names_to = "trait_name") %>% 
+#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
+#   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
+#          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+#          rel_ba_partner=ba_partner/(ba_target+ba_partner),
+#          nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
+#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
+#   ungroup() %>% 
+#   dplyr::select(-c("ba_multiple","trait_val")) %>%
+#   pivot_wider(values_from = c("nih","nid"),
+#               names_from = "trait_name") %>% 
+#   pivot_wider(names_from = name,
+#               values_from = value) %>% 
+#   dplyr::select(!matches(species.list.ipm))%>% 
+#   left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
+# ba_dif<-tar_read(ba_dif) %>% 
+#   select(!matches(c('ba_target',"ba_partner","n_species"))) %>% 
+#   mutate(elast="Abies_alba-amean",vr="mean") 
+# 
+# 
+# # gather all data
+# performance <-invasion %>% 
+#   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
+#   left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>% 
+#   arrange(species,clim_id,species_combination,elast,vr) %>% 
+#   pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max",
+#                       "inv_50","BA_100","BA_500","BA_1000","ba_dif"),
+#                names_to="metric",
+#                values_to="metric_val") %>% 
+#   arrange(species,clim_id,elast,species_combination)%>% 
+#   pivot_longer(cols=matches("\\.x|\\.y")) %>% 
+#   mutate(name_upd=gsub("\\.x$|\\.y$", "", name),
+#          name=str_sub(name,-1)) %>% 
+#   pivot_wider(names_from = name,
+#               values_from = value) %>% 
+#   mutate(compet_val=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~x,
+#                               TRUE~y)) %>% 
+#   select(-c("x","y")) %>% 
+#   pivot_wider(names_from = name_upd,
+#               values_from = compet_val)
+#   # filter(excluded!="excluded") %>% 
+#   # filter(is.na(smallcombi)|smallcombi!="present")
+#   save(performance,file = "performance.RData")
 
-# get disturbance metrics from mean 
-disturbance_metric<-tar_read(disturbance_ba) %>% 
-  mutate(elast="Abies_alba-amean",vr="mean") %>%
-  dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
-invasion_metric<-tar_read(invasion_ba) %>% 
-  mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
-  dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm)) 
-
-
-# compute mean elasticity per vital rates, for each species combi/clim
-disturbance <- disturbance_metric %>% 
-  arrange(species,clim_id,species_combination,elast) %>% 
-  pivot_longer(cols=matches(species.list.ipm)) %>% 
-  left_join(traits, by = c("name" = "species")) %>% 
-  group_by(species,elast,species_combination,clim_id,vr) %>% 
-  mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
-                               TRUE~0)) %>% 
-  pivot_longer(cols=colnames(traits)[-1],
-               values_to = "trait_val",
-               names_to = "trait_name") %>% 
-  group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
-  mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-         ba_target=sum(value*ba_multiple,na.rm = TRUE), 
-         rel_ba_partner=ba_partner/(ba_target+ba_partner),
-         nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
-         nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
-  ungroup() %>% 
-  dplyr::select(-c("ba_multiple","trait_val")) %>%
-  pivot_wider(values_from = c("nih","nid"),
-              names_from = "trait_name") %>% 
-  pivot_wider(names_from = name,
-              values_from = value) %>% 
-  dplyr::select(!matches(species.list.ipm)) 
-invasion <- invasion_metric %>% ungroup() %>% 
-  arrange(species,species_combination,clim_id) %>% 
-  pivot_longer(cols=matches(species.list.ipm)) %>% 
-  left_join(traits, by = c("name" = "species")) %>% 
-  group_by(species,elast,species_combination,clim_id,vr) %>% 
-  mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
-                               TRUE~0),
-         value=case_when(!is.na(value)~1,
-                         gsub("_"," ",name)==species~1,
-                         TRUE~value)) %>%  # *1 because invasion are made at constant basal area of compet
-  pivot_longer(cols=colnames(traits)[-1],
-               values_to = "trait_val",
-               names_to = "trait_name") %>% 
-  group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
-  mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-         ba_target=sum(value*ba_multiple,na.rm = TRUE), 
-         rel_ba_partner=ba_partner/(ba_target+ba_partner),
-         nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
-         nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
-  ungroup() %>% 
-  dplyr::select(-c("ba_multiple","trait_val")) %>%
-  pivot_wider(values_from = c("nih","nid"),
-              names_from = "trait_name") %>% 
-  pivot_wider(names_from = name,
-              values_from = value) %>% 
-  dplyr::select(!matches(species.list.ipm))%>% 
-  left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
-ba_dif<-tar_read(ba_dif) %>% 
-  select(!matches(c('ba_target',"ba_partner","n_species"))) %>% 
-  mutate(elast="Abies_alba-amean",vr="mean") 
-
-
-# gather all data
-performance <-invasion %>% 
-  left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
-  left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>% 
-  arrange(species,clim_id,species_combination,elast,vr) %>% 
-  pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max",
-                      "inv_50","BA_100","BA_500","BA_1000","ba_dif"),
-               names_to="metric",
-               values_to="metric_val") %>% 
-  arrange(species,clim_id,elast,species_combination)%>% 
-  pivot_longer(cols=matches("\\.x|\\.y")) %>% 
-  mutate(name_upd=gsub("\\.x$|\\.y$", "", name),
-         name=str_sub(name,-1)) %>% 
-  pivot_wider(names_from = name,
-              values_from = value) %>% 
-  mutate(compet_val=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~x,
-                              TRUE~y)) %>% 
-  select(-c("x","y")) %>% 
-  pivot_wider(names_from = name_upd,
-              values_from = compet_val)
-  # filter(excluded!="excluded") %>% 
-  # filter(is.na(smallcombi)|smallcombi!="present")
 
 #### Plots ####
 #%%%%%%%%%%%%%%
@@ -363,7 +370,7 @@ data_maint<-performance %>%
                                TRUE~"SpeciesCoex"),
          metric_val=case_when(metric_val>1~1,
                               TRUE~metric_val),
-         metric_val=(metric_val * (dim(data_maint)[1] - 1) + 0.5) / dim(data_maint)[1]) 
+         metric_val=(metric_val * (dim(.)[1] - 1) + 0.5) / dim(.)[1]) 
 
 data_maint %>% 
   filter(!is.nan(nih_shade)) %>% 
@@ -380,14 +387,11 @@ data_maint %>%
   geom_smooth(method="gam",se=FALSE)
 
 
-library(glmmTMB)
-library(effects)
 model <- glmmTMB(metric_val ~ pca_sc * nih_shade + I(pca_sc^2) * nih_shade + (nih_shade | species),#+ (nih | species)
                  data = data_maint,
                  family = beta_family(link = "logit"))
 
 # Simulate residuals
-library(DHARMa)
 sim_res <- simulateResiduals(model)
 plot(sim_res)
 
@@ -453,7 +457,6 @@ data_resilience<- performance %>%
 model2 <- lmer(metric_val ~(1|species) + pca_sc * ba_partner,
               data = data_resilience)
 # Simulate residuals
-library(DHARMa)
 sim_res <- simulateResiduals(model2)
 plot(sim_res)
 
@@ -476,6 +479,48 @@ summary(model2)
 
 #### Invasion ####
 #%%%%%%%%%%%%%%%%%%%
+
+## alone
+data_inv_sp<-performance %>% 
+  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
+  filter(metric=="inv_50") %>% 
+  filter(species==gsub("_"," ",species_combination))
+  # filter(!species%in%c("Pinus pinaster","Pinus pinea"))
+ggplot(data_inv_sp) +
+  geom_line(aes(pca_sc,metric_val, group=interaction(elast,species_combination)),color="grey")+
+  geom_point(aes(pca_sc,metric_val,color=ba_equil, group=interaction(elast,species_combination)),size=1)+
+  theme_bw()+
+  labs(x="PCA first axis (cold/wet -> hot/dry)",
+       y="Invasion rate in 50 first years")
+
+model3 <- lmer(metric_val ~(1|species)+ pca_sc + shade*I(pca_sc^2) , data = data_inv_sp)
+
+
+# model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
+#                data = data_inv)
+# Simulate residuals
+sim_res <- simulateResiduals(model3)
+plot(sim_res)
+
+
+ae3<-allEffects(model3)
+as.data.frame(ae3$`shade:I(pca_sc^2)`) %>% 
+  filter(shade%in%c(1,5)) %>% 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(shade)),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=as.factor(shade)))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+       y="Invasion rate on 50 first years",
+       color="Competitive hierarchy",
+       fill="Competitive hierarchy")+
+  theme_classic()
+summary(model3)
+
+
+## with combinations
 data_inv<- performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="inv_50") %>% 
@@ -486,12 +531,13 @@ data_inv<- performance %>%
   arrange(species,clim_id,n_species) %>% 
   mutate(inv_dif=metric_val/metric_val[1]) %>% 
   ungroup() %>% 
-  mutate(nih=case_when(is.nan(nid_pca1)~0,
-                       TRUE~nid_pca1),
+  mutate(nih=case_when(is.nan(nih_inv_sp)~0,
+                       TRUE~nih_inv_sp),
          inv_dif=case_when(inv_dif<0~0,
                            TRUE~inv_dif),
-         inv_dif=(inv_dif * (dim(data_maint)[1] - 1) + 0.5) / dim(data_maint)[1]) %>% 
-  filter(!species%in%c("Pinus pinaster","Pinus pinea"))
+         inv_dif=(inv_dif * (dim(.)[1] - 1) + 0.5) / dim(.)[1]) %>% 
+  filter(!species%in%c("Pinus pinaster","Pinus pinea")) %>% 
+  filter(species!=gsub("_"," ",species_combination))
 
 ggplot(data_inv) +
   geom_line(aes(pca_sc,inv_dif, group=interaction(elast,species_combination)),color="grey")+
@@ -504,23 +550,34 @@ ggplot(data_inv) +
        y="Performance",
        color="Total basal area of competitors")
 
-model3 <- glmmTMB(inv_dif ~ pca_sc * nih + I(pca_sc^2) * nih + (nih | species),#+ (nih | species)
-                 data = data_maint,
+model3 <- glmmTMB(inv_dif ~ pca_sc * ba_partner + I(pca_sc^2) * ba_partner+ (ba_partner | species),
+                 data = data_inv,
                  family = beta_family(link = "logit"))
 
-model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
-               data = data_inv)
+# model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
+#                data = data_inv)
 # Simulate residuals
-library(DHARMa)
 sim_res <- simulateResiduals(model3)
 plot(sim_res)
 
 
 ae3<-allEffects(model3)
-as.data.frame(ae3$`pca_sc:nih`) %>% 
-  # filter(nih%in%c(-0.4,-0.01,0.4)) %>% 
+as.data.frame(ae3$`pca_sc:ba_partner`) %>% 
+  filter(ba_partner%in%c(1,2,3)) %>% 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(ba_partner)),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=as.factor(ba_partner)))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+       y="Invasion rate on 50 first years",
+       color="Competitive hierarchy",
+       fill="Competitive hierarchy")+
+  theme_classic()
+# as.data.frame(ae3$`pca_sc:nih`) %>% 
+  # filter(nih%in%c(-0.4,-0.01,0.4)) %>%
   # filter(nih%in%c(0,0.2,0.4)) %>%
-  filter(nih%in%c(0,3,5)) %>%
+  # filter(nih%in%c(0.01,3,5)) %>%
   ggplot()+
   geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih)),alpha=0.2)+
   geom_line(aes(pca_sc,fit,color=as.factor(nih)))+
@@ -531,7 +588,7 @@ as.data.frame(ae3$`pca_sc:nih`) %>%
        color="Competitive hierarchy",
        fill="Competitive hierarchy")+
   theme_classic()
-summary(model3)
+ summary(model3)
 
 
 
