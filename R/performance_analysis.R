@@ -350,13 +350,16 @@ data_exclu%>%
   geom_col()+
   facet_wrap(~species)
 
-model<-glmmTMB(prop~(1|species)+clim_id*nih_mean,
+model1<-glmmTMB(prop~(1|species)+clim_id*nih_mean,
                data=subset(data_exclu,simul_state=="CompetitorExclusion"),
                family = beta_family(link = "logit"))
 
-  lmer(prop~clim_id*nih_mean+clim_id:species,data=subset(data_exclu,simul_state=="CompetitorExclusion"))
-summary(model)
-model$model
+summary(model1)
+
+# Simulate residuals
+sim_res <- simulateResiduals(model1)
+plot(sim_res)
+rm(model)
 
 
 ### Maintainance ####
