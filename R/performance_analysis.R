@@ -350,7 +350,11 @@ data_exclu%>%
   geom_col()+
   facet_wrap(~species)
 
-model=lmer(prop~clim_id*nih_mean+clim_id:species,data=subset(data_exclu,simul_state=="CompetitorExclusion"))
+model<-glmmTMB(prop~(1|species)+clim_id*nih_mean,
+               data=subset(data_exclu,simul_state=="CompetitorExclusion"),
+               family = beta_family(link = "logit"))
+
+  lmer(prop~clim_id*nih_mean+clim_id:species,data=subset(data_exclu,simul_state=="CompetitorExclusion"))
 summary(model)
 model$model
 
