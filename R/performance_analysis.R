@@ -18,7 +18,7 @@ tar_load(species.list.disturbance)
 tar_load(mean_demo)
 
 pca=prcomp(mean_demo[,c("inv_50","ba_equil")],scale=TRUE,center=TRUE)
-factoextra::fviz_pca_var(pca)
+# factoextra::fviz_pca_var(pca)
 
 mean_demo$pca1<-pca$x[,1]
 
@@ -30,6 +30,7 @@ traits<-read.csv("data/traits_complete.csv") %>%
               mutate(species=gsub(" ","_",species))) %>% 
   rename(inv_sp=inv_50)
 
+rm(pca,mean_demo)
 
 # compute mean climate var by categories
 mean_pca<-tar_read(climate.cat)$FUNDIV_plotcat %>% 
@@ -359,13 +360,145 @@ summary(model1)
 # Simulate residuals
 sim_res <- simulateResiduals(model1)
 plot(sim_res)
-rm(model)
+ae1<-allEffects(model1)
+as.data.frame(ae1$`clim_id:nih_mean`) |> 
+  filter(nih_mean%in%c(-3,-0.5,2)) %>% 
+  ggplot()+
+  geom_ribbon(aes(x=clim_id,ymin=lower,ymax=upper,fill=as.factor(nih_mean)),alpha=0.2)+
+  geom_line(aes(clim_id,fit,color=as.factor(nih_mean)))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+       y="BA at equilibrium / BA of pure stand",
+       color="Competitive hierarchy",
+       fill="Competitive hierarchy")+
+  theme_classic()
 
+
+rm(model1)
+rm(data_exclu)
 
 ### Maintainance ####
 #%%%%%%%%%%%%%%%%%%%%
 
-## fit a glm on ba_dif metric
+# species alone
+## data
+data_maint_sp<-performance %>% 
+  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  filter(species==gsub("_"," ",species_combination)) |> 
+  filter(metric=="ba_dif") |> 
+  left_join(traits %>% mutate(species=gsub("_"," ",species)))  
+
+## plot
+data_maint_sp |> 
+  ggplot(aes(pca_sc,ba_target))+
+  geom_line(aes(group=species))+
+  geom_point(aes(color=species))
+
+## model
+model2.0<-lmer(ba_target~(1|species)+pca_sc,
+               data=data_maint_sp)
+model2.1<-lmer(ba_target~(pca_sc|species)+pca_sc,
+               data=data_maint_sp)
+model2.2<-lmer(ba_target~(1|species)+pca_sc+I(pca_sc^2),
+               data=data_maint_sp)
+model2.3<-lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2),
+               data=data_maint_sp)
+model2.4<-lmer(ba_target~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
+               data=data_maint_sp)
+model2.5<-lmer(ba_target~(pca_sc|species)+shade+pca_sc+I(pca_sc^2),
+               data=data_maint_sp)
+model2.6<-lmer(ba_target~(pca_sc|species)+pca_sc*shade+I(pca_sc^2),
+             data=data_maint_sp)
+model2.7<-lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2)*shade,
+               data=data_maint_sp)
+
+# Calculate AIC and BIC
+AIC_values <- AIC(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7)
+BIC_values <- BIC(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7)
+
+# Combine AIC and BIC into a data frame
+model_comparison <- data.frame(
+  Model = c("Model 2.0","Model 2.1", "Model 2.2", "Model 2.3", 
+            "Model 2.4", "Model 2.5","Model 2.6","Model 2.7"),
+  AIC = AIC_values$AIC,
+  BIC = BIC_values$BIC
+)
+
+model_comparison |> 
+  arrange(AIC,BIC)
+
+
+# Examine random effects variance
+print(VarCorr(model2.1))
+print(VarCorr(model2.2))
+print(VarCorr(model2.7))
+
+model2=model2.7
+rm(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7,
+   AIC_values,BIC_values,model_comparison)
+
+## residuals
+sim_res <- simulateResiduals(model2)
+plot(sim_res)
+
+summary(model2)
+ae2<-allEffects(model2)
+plot(ae2)
+plot_2<-as.data.frame(ae2$`I(pca_sc^2):shade`) |> 
+  filter(shade%in%c(1,3,5)) |>
+  mutate(`Competive ability`=factor(case_when(shade==1~"Low",
+                                              shade==3~"Medium",
+                                              shade==5~"High"),
+                                    levels=c("Low","Medium","High"))) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competive ability`),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=`Competive ability`))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  theme_classic()+
+  theme(text = element_text(size=10))+
+  labs(x="Climatic range scaled by species \n (cold/humid -> hot/dry)",
+       y="Basal area at equilibrium \n (m2/Ha)")
+
+ggsave(plot=plot_2,
+       filename= "figure/sfe/Ba_quil_sp.png",
+       dpi=600,
+       width=10,
+       height = 6,
+       units = "cm")
+rm(plot_2,model2,sim_res,ae2,data_maint_sp)       
+  
+  
+# Plot effect for shade level
+# shade_levels <- c(1, 3, 5)
+# 
+# effects_list <- list()
+# 
+# for (i in seq_along(shade_levels)) {
+#   shade_value <- shade_levels[i]
+#   
+#   effect_i <- Effect(
+#     focal.predictors = "pca_sc",
+#     mod = model2,
+#     xlevels =100,
+#     fixed.predictors = list(given.values = c(shade=shade_value))
+#   )
+#   
+#   effects_list[[i]] <- as.data.frame(effect_i)
+#   effects_list[[i]]$shade <- shade_value
+# }
+# 
+# # Combine all effects into one data frame
+# effects_df <- do.call(rbind, effects_list)
+# 
+# ggplot(effects_df, aes(x = pca_sc, y = fit, color = factor(shade))) +
+#   geom_line(size = 1) +
+#   geom_ribbon(aes(ymin = lower, ymax = upper, fill = factor(shade)), alpha = 0.2, color = NA) +
+#   theme_minimal()
+
+# with species combination
+## data
 data_maint<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="ba_dif") %>% 
@@ -379,6 +512,7 @@ data_maint<-performance %>%
                               TRUE~metric_val),
          metric_val=(metric_val * (dim(.)[1] - 1) + 0.5) / dim(.)[1]) 
 
+## plots
 data_maint %>% 
   filter(!is.nan(nih_shade)) %>% 
   # filter(clim_id%in%c(1,5,10)) %>%
@@ -392,6 +526,38 @@ data_maint %>%
   ggplot(aes(pca_sc,nih_shade))+
   geom_point()+
   geom_smooth(method="gam",se=FALSE)
+
+## model selections
+model3.0<- glmmTMB(metric_val ~ (1|species) + pca_sc,
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.1<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc,
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.2<- glmmTMB(metric_val ~ (1|species)+pca_sc+I(pca_sc^2),
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.3<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc+I(pca_sc^2),
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.4<- glmmTMB(metric_val ~ (I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.5<- glmmTMB(metric_val ~ (pca_sc|species)+nih_shade+pca_sc+I(pca_sc^2),
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.6<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_shade+I(pca_sc^2),
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.7<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc+I(pca_sc^2)*nih_shade,
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+model3.8<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_shade+I(pca_sc^2)*nih_shade,
+                   data = data_maint,
+                   family = beta_family(link = "logit"))
+
+
+
 
 
 model <- glmmTMB(metric_val ~ pca_sc * nih_shade + I(pca_sc^2) * nih_shade + (nih_shade | species),#+ (nih | species)
