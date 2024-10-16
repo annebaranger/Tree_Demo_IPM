@@ -898,13 +898,13 @@ model6.3<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2),
                   data=data_inv_sp)
 model6.4<-glmmTMB(metric_val~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                   data=data_inv_sp)
-model6.5<-glmmTMB(metric_val~(pca_sc|species)+pca1+pca_sc+I(pca_sc^2),
+model6.5<-glmmTMB(metric_val~(pca_sc|species)+shade+pca_sc+I(pca_sc^2),
                   data=data_inv_sp)
-model6.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*pca1+I(pca_sc^2),
+model6.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*shade+I(pca_sc^2),
                   data=data_inv_sp)
-model6.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*pca1,
+model6.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*shade,
                   data=data_inv_sp)
-model6.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*pca1+I(pca_sc^2)*pca1,
+model6.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*shade+I(pca_sc^2)*shade,
                   data=data_inv_sp)
 
 
@@ -914,8 +914,8 @@ BIC_values <- BIC(model6.0,model6.1, model6.2,model6.3,model6.4,model6.5,model6.
 
 ## Combine AIC and BIC into a data frame
 model_comparison <- data.frame(
-  Model = c("Model 4.0","Model 4.1", "Model 4.2", "Model 4.3", 
-            "Model 4.4", "Model 4.5","Model 4.6","Model 4.7","Model 4.8"),
+  Model = c("Model 6.0","Model 6.1", "Model 6.2", "Model 6.3", 
+            "Model 6.4", "Model 6.5","Model 6.6","Model 6.7","Model 6.8"),
   AIC = AIC_values$AIC,
   BIC = BIC_values$BIC
 )
@@ -924,7 +924,7 @@ model_comparison |>
   arrange(AIC,BIC)
 
 
-model6<-model6.8
+model6<-model6.7
 rm(model6.0,model6.1, model6.2,model6.3,model6.4,model6.5,model6.6,model6.7,model6.8,
    model_comparison, AIC_values,BIC_values)
 
@@ -936,67 +936,44 @@ plot(sim_res)
 ## draw effects
 summary(model6)
 ae6<-allEffects(model6)
-plot_6<-as.data.frame(ae6$`pca1:I(pca_sc^2)`)
-  mutate(fit=exp(fit),
-         lower=exp(lower),
-         upper=exp(upper)) |> 
+plot_6<-as.data.frame(ae6$`I(pca_sc^2):pca1`) |>
+  filter(pca1 %in% c(-2,0.7,3)) |> 
+  mutate(`Competive ability`=factor(case_when(pca1==-2~"Low",
+                                              pca1==0.7~"Medium",
+                                              pca1==3~"High"),
+                                    levels=c("Low","Medium","High"))) |> 
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
-  geom_line(aes(pca_sc,fit))+
-  
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competive ability`),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=`Competive ability`))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="Resilience (1/m2)")
+  labs(x="Climatic range scaled by species \n (cold/humid -> hot/dry)",
+       y="Invasion rate \n (m2/year)")
 
-ggsave(plot=plot_4,
-       filename= "figure/sfe/resilience_sp.png",
+
+ggsave(plot=plot_6,
+       filename= "figure/sfe/invasion_sp.png",
        dpi=600,
        width=13,
        height = 8,
        units = "cm")
-rm(plot_4,model4,sim_res,ae4,data_resilience_sp)   
+rm(plot_6,model6,sim_res,ae6,data_inv_sp)   
 
 
-
-
-
-
-
-
-
-
-
-model3 <- lmer(metric_val ~(1|species)+ pca_sc + shade*I(pca_sc^2) , data = data_inv_sp)
 
 
 # model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
 #                data = data_inv)
-# Simulate residuals
-sim_res <- simulateResiduals(model3)
-plot(sim_res)
 
 
-ae3<-allEffects(model3)
-as.data.frame(ae3$`shade:I(pca_sc^2)`) %>% 
-  filter(shade%in%c(1,5)) %>% 
-  ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(shade)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(shade)))+
-  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
-  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="Invasion rate on 50 first years",
-       color="Competitive hierarchy",
-       fill="Competitive hierarchy")+
-  theme_classic()
-summary(model3)
-
-
-## with combinations
+# with combinations
+## data
 data_inv<- performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="inv_50") %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
   rowwise() %>% 
   mutate(n_species=length(strsplit(species_combination,"\\.")[[1]])) %>% 
   ungroup() %>% 
@@ -1012,6 +989,7 @@ data_inv<- performance %>%
   filter(!species%in%c("Pinus pinaster","Pinus pinea")) %>% 
   filter(species!=gsub("_"," ",species_combination))
 
+## plots
 ggplot(data_inv) +
   geom_line(aes(pca_sc,inv_dif, group=interaction(elast,species_combination)),color="grey")+
   geom_point(aes(pca_sc,inv_dif,color=nih, group=interaction(elast,species_combination)),size=1)+
@@ -1023,72 +1001,107 @@ ggplot(data_inv) +
        y="Performance",
        color="Total basal area of competitors")
 
-model3 <- glmmTMB(inv_dif ~ pca_sc * ba_partner + I(pca_sc^2) * ba_partner+ (ba_partner | species),
-                 data = data_inv,
-                 family = beta_family(link = "logit"))
 
-# model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
-#                data = data_inv)
+## models
+model7.0 <- glmmTMB(inv_dif ~ (1|species) + pca_sc,
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.1 <- glmmTMB(inv_dif ~ (pca_sc|species) + pca_sc,
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.2 <- glmmTMB(inv_dif ~ (1|species) + pca_sc+I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.3 <- glmmTMB(inv_dif ~ (pca_sc|species) + pca_sc + I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.4 <- glmmTMB(inv_dif ~ (I(pca_sc^2)|species) + pca_sc + I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.5 <- glmmTMB(inv_dif ~ (pca_sc|species) + nih_pca1 + pca_sc + I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.6 <- glmmTMB(inv_dif ~ (pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.7 <- glmmTMB(inv_dif ~ (pca_sc|species)+pca_sc+I(pca_sc^2)*nih_pca1,
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.8 <- glmmTMB(inv_dif ~(pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2)*nih_pca1,
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.9 <- glmmTMB(inv_dif ~ (nih_pca1|species)+pca_sc*nih_pca1+I(pca_sc^2),
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.10 <- glmmTMB(inv_dif ~ (nih_pca1|species)+pca_sc+I(pca_sc^2)*nih_pca1,
+                    data = data_inv,
+                    family = beta_family(link = "logit"))
+model7.11 <- glmmTMB(inv_dif ~ (nih_pca1|species)+pca_sc*nih_pca1+I(pca_sc^2)*nih_pca1,
+                     data = data_inv,
+                     family = beta_family(link = "logit"))
+
+# model3 <- glmmTMB(inv_dif ~ pca_sc * ba_partner + I(pca_sc^2) * ba_partner+ (ba_partner | species),
+#                  data = data_inv,
+#                  family = beta_family(link = "logit"))
+
+## Calculate AIC and BIC
+AIC_values <- AIC(model7.0,model7.1, model7.2,model7.3,model7.4,model7.5,model7.6,
+                  model7.7,model7.8,model7.9,model7.10,model7.11)
+BIC_values <- BIC(model7.0,model7.1, model7.2,model7.3,model7.4,model7.5,model7.6,
+                  model7.7,model7.8,model7.9,model7.10,model7.11)
+
+## Combine AIC and BIC into a data frame
+model_comparison <- data.frame(
+  Model = c("Model 7.0","Model 7.1", "Model 7.2", "Model 7.3","Model 7.4","Model 7.5",
+            "Model 7.6","Model 7.7","Model 7.8","Model 7.9","Model 7.10","Model 7.11"),
+  AIC = AIC_values$AIC,
+  BIC = BIC_values$BIC
+)
+
+model_comparison |> 
+  arrange(AIC,BIC)
+
+
+model7<-model7.9
+rm(model7.0,model7.1, model7.2,model7.3,model7.4,model7.5,model7.6,model7.7,model7.8,
+   model7.9,model7.10,model7.11,model_comparison, AIC_values,BIC_values)
+
+
+
 # Simulate residuals
-sim_res <- simulateResiduals(model3)
+sim_res <- simulateResiduals(model7)
 plot(sim_res)
 
 
-ae3<-allEffects(model3)
-as.data.frame(ae3$`pca_sc:ba_partner`) %>% 
-  filter(ba_partner%in%c(1,2,3)) %>% 
+ae7<-allEffects(model7)
+plot_7 <- as.data.frame(ae7$`pca_sc:nih_pca1`) |> 
+  filter(nih_pca1%in%c(-5,-0.1,4)) |>
+  mutate(nih_pca1=factor(case_when(nih_pca1==-5~"High competition",
+                                   nih_pca1==-0.1~"Medium competition",
+                                   nih_pca1==4~"Low competition"),
+                         levels=c("High competition","Medium competition","Low competition"))) |>
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(ba_partner)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(ba_partner)))+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=nih_pca1),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=nih_pca1))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="Invasion rate on 50 first years",
-       color="Competitive hierarchy",
-       fill="Competitive hierarchy")+
-  theme_classic()
-# as.data.frame(ae3$`pca_sc:nih`) %>% 
-  # filter(nih%in%c(-0.4,-0.01,0.4)) %>%
-  # filter(nih%in%c(0,0.2,0.4)) %>%
-  # filter(nih%in%c(0.01,3,5)) %>%
-  ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(nih)))+
-  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
-  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="Invasion rate on 50 first years",
-       color="Competitive hierarchy",
-       fill="Competitive hierarchy")+
-  theme_classic()
- summary(model3)
-
-
-
-model4 <- lmer(metric_val ~(pca_sc|species) + pca_sc * ba_partner + I(pca_sc^2) ,
-               data = data_inv)
-# Simulate residuals
-sim_res <- simulateResiduals(model4)
-plot(sim_res)
-
-
-ae4<-allEffects(model4)
-as.data.frame(ae4$`pca_sc:ba_partner` ) %>% 
-  filter(ba_partner%in%c(0,1.5,3)) %>% 
-  ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(ba_partner)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(ba_partner)))+
-  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
-  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
-       y="BA at equilibrium / BA of pure stand",
-       color="Competitive hierarchy",
-       fill="Competitive hierarchy")+
+       y="Invasion rate in competition / pure stand",
+       color="Target species \n submitted to:",
+       fill="Target species \n submitted to:")+
   theme_classic()
 
+ggsave(plot=plot_7,
+       filename= "figure/sfe/invasion_allsp.png",
+       dpi=600,
+       width=13,
+       height = 8,
+       units = "cm")
+
+rm(plot_7,model7,sim_res,ae7,data_inv)   
 
 
-#### model test ####
+#### competition ####
 #%%%%%%%%%%%%%%%%%%%
 
 # test effect of competition
@@ -1100,10 +1113,4 @@ data.compet<- performance %>%
          ba_tot=scale(ba_tot,scale=TRUE)) 
 summary(lmer(ba_tot~pca1+(pca1|species),data=data.compet))
 
-performance %>% 
-  left_join(species.combination.select,by=c("species","clim_id","species_combination")) %>% 
-  filter(vr=="mean") %>% 
-  # filter(species=="Abies alba") %>% 
-  filter(metric=="inv_50")->data.test
-data.test %>% ggplot(aes(ba_partner,metric_val,color=pca1))+geom_point()+facet_wrap(~species)+scale_color_gradientn(colours = viridis(n=11))
-summary(lmer(metric_val~(1|species)+(1|species:species_combination)+pca1*ba_partner,data=data.test))
+
