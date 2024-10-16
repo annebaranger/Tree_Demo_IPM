@@ -396,6 +396,8 @@ data_maint_sp |>
   geom_point(aes(color=species))
 
 ## model
+trait=colnames(traits)[-1]
+
 model2.0<-lmer(ba_target~(1|species)+pca_sc,
                data=data_maint_sp)
 model2.1<-lmer(ba_target~(pca_sc|species)+pca_sc,
@@ -406,24 +408,43 @@ model2.3<-lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2),
                data=data_maint_sp)
 model2.4<-lmer(ba_target~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                data=data_maint_sp)
-model2.5<-lmer(ba_target~(pca_sc|species)+shade+pca_sc+I(pca_sc^2),
-               data=data_maint_sp)
-model2.6<-lmer(ba_target~(pca_sc|species)+pca_sc*shade+I(pca_sc^2),
-             data=data_maint_sp)
-model2.7<-lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2)*shade,
-               data=data_maint_sp)
+## Calculate AIC and BIC
+AIC_values <- AIC(model2.0,model2.1, model2.2,model2.3,model2.4)
+BIC_values <- BIC(model2.0,model2.1, model2.2,model2.3,model2.4)
 
-# Calculate AIC and BIC
-AIC_values <- AIC(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7)
-BIC_values <- BIC(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7)
-
-# Combine AIC and BIC into a data frame
+## Combine AIC and BIC into a data frame
 model_comparison <- data.frame(
   Model = c("Model 2.0","Model 2.1", "Model 2.2", "Model 2.3", 
-            "Model 2.4", "Model 2.5","Model 2.6","Model 2.7"),
+            "Model 2.4"),
   AIC = AIC_values$AIC,
   BIC = BIC_values$BIC
 )
+
+for(t in trait){
+  print(t)
+  data_maint_sp$trait<-data_maint_sp[[t]]
+  
+  model2.5<-lmer(ba_target~(pca_sc|species)+trait+pca_sc+I(pca_sc^2),
+                 data=data_maint_sp)
+  model2.6<-lmer(ba_target~(pca_sc|species)+pca_sc*trait+I(pca_sc^2),
+                 data=data_maint_sp)
+  model2.7<-lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2)*trait,
+                 data=data_maint_sp)
+  model2.8<-lmer(ba_target~(pca_sc|species)+pca_sc*trait+I(pca_sc^2)*trait,
+                 data=data_maint_sp)
+  
+  AIC_values <- AIC(model2.5,model2.6,model2.7,model2.8)
+  BIC_values <- BIC(model2.5,model2.6,model2.7,model2.8)
+  model_comp_t<- data.frame(
+    Model = paste0(c( "Model 2.5","Model 2.6","Model 2.7","Model 2.8"),"_",t),
+    AIC = AIC_values$AIC,
+    BIC = BIC_values$BIC
+  )
+  model_comparison<-rbind(model_comparison,
+                          model_comp_t)
+  rm(model_comp_t)
+}
+
 
 model_comparison |> 
   arrange(AIC,BIC)
@@ -434,8 +455,9 @@ print(VarCorr(model2.1))
 print(VarCorr(model2.2))
 print(VarCorr(model2.7))
 
-model2=model2.7
-rm(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7,
+model2=lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2)*pca1,
+            data=data_maint_sp)
+rm(model2.0,model2.1, model2.2,model2.3,model2.4,model2.5,model2.6,model2.7,model2.8,
    AIC_values,BIC_values,model_comparison)
 
 ## residuals
@@ -445,11 +467,11 @@ plot(sim_res)
 summary(model2)
 ae2<-allEffects(model2)
 plot(ae2)
-plot_2<-as.data.frame(ae2$`I(pca_sc^2):shade`) |> 
-  filter(shade%in%c(1,3,5)) |>
-  mutate(`Competive ability`=factor(case_when(shade==1~"Low",
-                                              shade==3~"Medium",
-                                              shade==5~"High"),
+plot_2<-as.data.frame(ae2$`I(pca_sc^2):pca1`) |> 
+  filter(pca1%in%c(-2,0.7,3)) |>
+  mutate(`Competive ability`=factor(case_when(pca1==-2~"Low",
+                                              pca1==0.7~"Medium",
+                                              pca1==3~"High"),
                                     levels=c("Low","Medium","High"))) |> 
   ggplot()+
   geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competive ability`),alpha=0.2)+
@@ -502,7 +524,7 @@ rm(plot_2,model2,sim_res,ae2,data_maint_sp)
 data_maint<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   filter(metric=="ba_dif") %>% 
-  filter(!is.nan(nih_shade)) %>% 
+  filter(!is.nan(nih_pca1)) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
   mutate(species=forcats::fct_reorder(species, shade),
          simul_state=case_when(!is.na(smallcombi)~"CompetitorExclusion",
@@ -514,16 +536,16 @@ data_maint<-performance %>%
 
 ## plots
 data_maint %>% 
-  filter(!is.nan(nih_shade)) %>% 
+  filter(!is.nan(nih_pca1)) %>% 
   # filter(clim_id%in%c(1,5,10)) %>%
   # filter(species=="Fagus sylvatica") %>% View()
-  ggplot(aes(pca_sc,metric_val,color=nih_shade))+
+  ggplot(aes(pca_sc,metric_val,color=nih_pca1))+
   geom_point()+
   geom_smooth(method="lm",se=FALSE)+
   facet_wrap(~species)
 data_maint %>% 
-  filter(!is.nan(nih_shade)) %>% 
-  ggplot(aes(pca_sc,nih_shade))+
+  filter(!is.nan(nih_pca1)) %>% 
+  ggplot(aes(pca_sc,nih_pca1))+
   geom_point()+
   geom_smooth(method="gam",se=FALSE)
 
@@ -543,19 +565,19 @@ model3.3<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc+I(pca_sc^2),
 model3.4<- glmmTMB(metric_val ~ (I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                    data = data_maint,
                    family = beta_family(link = "logit"))
-model3.5<- glmmTMB(metric_val ~ (pca_sc|species)+nih_shade+pca_sc+I(pca_sc^2),
+model3.5<- glmmTMB(metric_val ~ (pca_sc|species)+nih_pca1+pca_sc+I(pca_sc^2),
                    data = data_maint,
                    family = beta_family(link = "logit"))
-model3.6<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_shade+I(pca_sc^2),
+model3.6<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2),
                    data = data_maint,
                    family = beta_family(link = "logit"))
-model3.7<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc+I(pca_sc^2)*nih_shade,
+model3.7<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc+I(pca_sc^2)*nih_pca1,
                    data = data_maint,
                    family = beta_family(link = "logit"))
-model3.8<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_shade+I(pca_sc^2)*nih_shade,
+model3.8<- glmmTMB(metric_val ~ (pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2)*nih_pca1,
                    data = data_maint,
                    family = beta_family(link = "logit"))
-model3.9<- glmmTMB(metric_val ~ pca_sc * nih_shade + I(pca_sc^2) * nih_shade + (nih_shade | species),
+model3.9<- glmmTMB(metric_val ~ pca_sc * nih_pca1 + I(pca_sc^2) * nih_pca1 + (nih_pca1 | species),
                    data = data_maint,
                    family = beta_family(link = "logit"))
 
@@ -588,15 +610,15 @@ plot(sim_res)
 # draw effects
 summary(model)
 ae3<-allEffects(model3)
-plot_3<-as.data.frame(ae3$`pca_sc:nih_shade`) |> 
-  filter(nih_shade%in%c(-3,-0.1,3)) %>% 
-  mutate(nih_shade=factor(case_when(nih_shade==-3~"High competition",
-                                    nih_shade==-0.1~"Medium competition",
-                                    nih_shade==3~"Low competition"),
+plot_3<-as.data.frame(ae3$`pca_sc:nih_pca1`) |> 
+  filter(nih_pca1%in%c(-5,-0.1,4)) %>% 
+  mutate(nih_pca1=factor(case_when(nih_pca1==-5~"High competition",
+                                   nih_pca1==-0.1~"Medium competition",
+                                   nih_pca1==4~"Low competition"),
                           levels=c("High competition","Medium competition","Low competition"))) |> 
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih_shade)),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=as.factor(nih_shade)))+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih_pca1)),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=as.factor(nih_pca1)))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
@@ -607,7 +629,7 @@ plot_3<-as.data.frame(ae3$`pca_sc:nih_shade`) |>
        fill="Target species\n submitted to : ")
 
 ggsave(plot=plot_3,
-       filename= "figure/sfe/Ba_quil_allsp.png",
+       filename= "figure/sfe/Ba_quil_allsp-2.png",
        dpi=600,
        width=13,
        height = 8,
@@ -649,55 +671,68 @@ summary(data_resilience_sp)
 
 
 ## models
+trait=colnames(traits)[-1]
 model4.0<-glmmTMB(metric_val~(1|species)+pca_sc,
                   data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
 model4.1<-glmmTMB(metric_val~(pca_sc|species)+pca_sc,
                   data=data_resilience_sp)
-                  # family = lognormal(link = "identity"),
-                  # control = glmmTMBControl(optCtrl = list(iter.max = 10000, eval.max = 10000)))
 model4.2<-glmmTMB(metric_val~(1|species)+pca_sc+I(pca_sc^2),
                   data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
 model4.3<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2),
                   data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
 model4.4<-glmmTMB(metric_val~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                   data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
-model4.5<-glmmTMB(metric_val~(pca_sc|species)+pca1+pca_sc+I(pca_sc^2),
-                  data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
-model4.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*pca1+I(pca_sc^2),
-                  data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
-model4.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*pca1,
-                  data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
-model4.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*pca1+I(pca_sc^2)*pca1,
-                  data=data_resilience_sp)
-                  # family = lognormal(link = "identity"))
+
 
 
 ## Calculate AIC and BIC
-AIC_values <- AIC(model4.0,model4.1, model4.2,model4.3,model4.4,model4.5,model4.6,model4.7,model4.8)
-BIC_values <- BIC(model4.0,model4.1, model4.2,model4.3,model4.4,model4.5,model4.6,model4.7,model4.8)
+AIC_values <- AIC(model4.0,model4.1, model4.2,model4.3,model4.4)
+BIC_values <- BIC(model4.0,model4.1, model4.2,model4.3,model4.4)
 
 ## Combine AIC and BIC into a data frame
 model_comparison <- data.frame(
   Model = c("Model 4.0","Model 4.1", "Model 4.2", "Model 4.3", 
-            "Model 4.4", "Model 4.5","Model 4.6","Model 4.7","Model 4.8"),
+            "Model 4.4"),
   AIC = AIC_values$AIC,
   BIC = BIC_values$BIC
 )
+
+
+
+for(t in trait){
+  print(t)
+  data_resilience_sp$trait<-data_resilience_sp[[t]]
+  
+  model4.5<-glmmTMB(metric_val~(pca_sc|species)+trait+pca_sc+I(pca_sc^2),
+                    data=data_resilience_sp)
+  model4.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*trait+I(pca_sc^2),
+                    data=data_resilience_sp)
+  model4.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*trait,
+                    data=data_resilience_sp)
+  model4.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*trait+I(pca_sc^2)*trait,
+                    data=data_resilience_sp)
+  AIC_values <- AIC(model4.5,model4.6,model4.7,model4.8)
+  BIC_values <- BIC(model4.5,model4.6,model4.7,model4.8)
+  model_comp_t<- data.frame(
+    Model = paste0(c("Model 4.5","Model 4.6","Model 4.7","Model 4.8"),"_",t),
+    AIC = AIC_values$AIC,
+    BIC = BIC_values$BIC
+  )
+  model_comparison<-rbind(model_comparison,
+                          model_comp_t)
+  rm(model_comp_t)
+}
+
 
 model_comparison |> 
   arrange(AIC,BIC)
 
 
-model4<-model4.3
+model4<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*inv_sp,
+                data=data_resilience_sp)
 rm(model4.0,model4.1, model4.2,model4.3,model4.4,model4.5,model4.6,model4.7,model4.8,
    model_comparison, AIC_values,BIC_values)
+
 
 ## Simulate residuals
 sim_res <- simulateResiduals(model4)
@@ -707,21 +742,27 @@ plot(sim_res)
 ## draw effects
 summary(model4)
 ae4<-allEffects(model4)
-plot_4<-as.data.frame(ae4$`I(pca_sc^2)`) |> 
+plot_4<-as.data.frame(ae4$`I(pca_sc^2):inv_sp`) |>
+  filter(inv_sp %in% c(0.05,0.3,0.5)) |> 
   mutate(fit=exp(fit),
          lower=exp(lower),
          upper=exp(upper)) |> 
+  mutate(`Competive ability`=factor(case_when(inv_sp==0.05~"Low",
+                                              inv_sp==0.3~"Medium",
+                                              inv_sp==0.5~"High"),
+                                     levels=c("Low","Medium","High"))) |> 
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
-  geom_line(aes(pca_sc,fit))+
-  
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competive ability`),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=`Competive ability`))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
   labs(x="Relative niche of species (cold/humid -> hot/dry)",
        y="Resilience (1/m2)")
 
 ggsave(plot=plot_4,
-       filename= "figure/sfe/resilience_sp.png",
+       filename= "figure/sfe/resilience_sp_2.png",
        dpi=600,
        width=13,
        height = 8,
@@ -759,7 +800,7 @@ data_resilience%>%
   #                      "Picea abies","Quercus ilex","Quercus petraea","Quercus robur")) %>%
   ggplot() +
   geom_line(aes(pca_sc,res_dif, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca_sc,res_dif,color=nih_pca1, group=interaction(elast,species_combination)),size=3)+
+  geom_point(aes(pca_sc,res_dif,color=nih_inv_sp, group=interaction(elast,species_combination)),size=3)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
@@ -779,19 +820,19 @@ model5.3<-glmmTMB(res_dif~(pca_sc|species)+pca_sc+I(pca_sc^2),
                   data=data_resilience)
 model5.4<-glmmTMB(res_dif~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                   data=data_resilience)
-model5.5<-glmmTMB(res_dif~(pca_sc|species)+nih_pca1+pca_sc+I(pca_sc^2),
+model5.5<-glmmTMB(res_dif~(pca_sc|species)+nih_inv_sp+pca_sc+I(pca_sc^2),
                   data=data_resilience)
-model5.6<-glmmTMB(res_dif~(pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2),
+model5.6<-glmmTMB(res_dif~(pca_sc|species)+pca_sc*nih_inv_sp+I(pca_sc^2),
                   data=data_resilience)
-model5.7<-glmmTMB(res_dif~(pca_sc|species)+pca_sc+I(pca_sc^2)*nih_pca1,
+model5.7<-glmmTMB(res_dif~(pca_sc|species)+pca_sc+I(pca_sc^2)*nih_inv_sp,
                   data=data_resilience)
-model5.8<-glmmTMB(res_dif~(pca_sc|species)+pca_sc*nih_pca1+I(pca_sc^2)*nih_pca1,
+model5.8<-glmmTMB(res_dif~(pca_sc|species)+pca_sc*nih_inv_sp+I(pca_sc^2)*nih_inv_sp,
                   data=data_resilience)
-model5.9<-glmmTMB(res_dif~(nih_pca1|species)+pca_sc*nih_pca1+I(pca_sc^2),
+model5.9<-glmmTMB(res_dif~(nih_inv_sp|species)+pca_sc*nih_inv_sp+I(pca_sc^2),
                   data=data_resilience)
-model5.10<-glmmTMB(res_dif~(nih_pca1|species)+pca_sc+I(pca_sc^2)*nih_pca1,
+model5.10<-glmmTMB(res_dif~(nih_inv_sp|species)+pca_sc+I(pca_sc^2)*nih_inv_sp,
                   data=data_resilience)
-model5.11<-glmmTMB(res_dif~(nih_pca1|species)+pca_sc*nih_pca1+I(pca_sc^2)*nih_pca1,
+model5.11<-glmmTMB(res_dif~(nih_inv_sp|species)+pca_sc*nih_inv_sp+I(pca_sc^2)*nih_inv_sp,
                   data=data_resilience)
 
 
@@ -814,7 +855,7 @@ model_comparison |>
   arrange(AIC,BIC)
 
 
-model5<-model5.9
+model5<-model5.6
 rm(model5.0,model5.1, model5.2,model5.3,model5.4,model5.5,model5.6,model5.7,model5.8,
    model5.9,model5.10,model5.11,model_comparison, AIC_values,BIC_values)
 
@@ -827,25 +868,18 @@ plot(sim_res)
 summary(model5)
 ae5<-allEffects(model5)
 plot(ae5)
-plot_5<-as.data.frame(ae5$`pca_sc:nih_pca1`) |>
-# plot_5<-as.data.frame(ae5$`pca_sc:ba_partner`) |>
+plot_5<-as.data.frame(ae5$`pca_sc:nih_inv_sp`) |> 
   mutate(fit=exp(fit),
          lower=exp(lower),
          upper=exp(upper)) |> 
-  filter(nih_pca1%in%c(-3,0.6,2)) |>
-  mutate(nih_pca1=factor(case_when(nih_pca1==-3~"High competition",
-                                   nih_pca1==0.6~"Medium competition",
-                                   nih_pca1==2~"Low competition"),
+  filter(nih_inv_sp%in%c(-0.4,0.04,0.5)) |>
+  mutate(nih_inv_sp=factor(case_when(nih_inv_sp==-0.4~"High competition",
+                                     nih_inv_sp==0.04~"Medium competition",
+                                     nih_inv_sp==0.5~"Low competition"),
                           levels=c("High competition","Medium competition","Low competition"))) |>
-  # filter(ba_partner%in%c(1,30,60)) |>
-  # mutate(nih_pca1=factor(case_when(ba_partner==60~"High competition",
-  #                                  ba_partner==30~"Medium competition",
-  #                                  ba_partner==1~"Low competition"),
-  #                        levels=c("High competition","Medium competition","Low competition"))) |>
-  
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=nih_pca1),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=nih_pca1))+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=nih_inv_sp),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=nih_inv_sp))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
@@ -856,7 +890,7 @@ plot_5<-as.data.frame(ae5$`pca_sc:nih_pca1`) |>
        fill="Target species \n submitted to:")
 
 ggsave(plot=plot_5,
-       filename= "figure/sfe/resiliencep.png",
+       filename= "figure/sfe/resilience_allsp_2.png",
        dpi=600,
        width=13,
        height = 8,
@@ -888,6 +922,8 @@ ggplot(data_inv_sp) +
        y="Invasion rate in 50 first years")
 
 ## model
+trait=colnames(traits)[-1]
+
 model6.0<-glmmTMB(metric_val~(1|species)+pca_sc,
                   data=data_inv_sp)
 model6.1<-glmmTMB(metric_val~(pca_sc|species)+pca_sc,
@@ -898,33 +934,51 @@ model6.3<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2),
                   data=data_inv_sp)
 model6.4<-glmmTMB(metric_val~(I(pca_sc^2)|species)+pca_sc+I(pca_sc^2),
                   data=data_inv_sp)
-model6.5<-glmmTMB(metric_val~(pca_sc|species)+shade+pca_sc+I(pca_sc^2),
-                  data=data_inv_sp)
-model6.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*shade+I(pca_sc^2),
-                  data=data_inv_sp)
-model6.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*shade,
-                  data=data_inv_sp)
-model6.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*shade+I(pca_sc^2)*shade,
-                  data=data_inv_sp)
-
 
 ## Calculate AIC and BIC
-AIC_values <- AIC(model6.0,model6.1, model6.2,model6.3,model6.4,model6.5,model6.6,model6.7,model6.8)
-BIC_values <- BIC(model6.0,model6.1, model6.2,model6.3,model6.4,model6.5,model6.6,model6.7,model6.8)
+AIC_values <- AIC(model6.0,model6.1, model6.2,model6.3,model6.4)
+BIC_values <- BIC(model6.0,model6.1, model6.2,model6.3,model6.4)
 
 ## Combine AIC and BIC into a data frame
 model_comparison <- data.frame(
   Model = c("Model 6.0","Model 6.1", "Model 6.2", "Model 6.3", 
-            "Model 6.4", "Model 6.5","Model 6.6","Model 6.7","Model 6.8"),
+            "Model 6.4"),
   AIC = AIC_values$AIC,
   BIC = BIC_values$BIC
 )
 
+for(t in trait){
+  print(t)
+  data_inv_sp$trait<-data_inv_sp[[t]]
+
+  model6.5<-glmmTMB(metric_val~(pca_sc|species)+trait+pca_sc+I(pca_sc^2),
+                    data=data_inv_sp)
+  model6.6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*trait+I(pca_sc^2),
+                    data=data_inv_sp)
+  model6.7<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*trait,
+                    data=data_inv_sp)
+  model6.8<-glmmTMB(metric_val~(pca_sc|species)+pca_sc*trait+I(pca_sc^2)*trait,
+                    data=data_inv_sp)
+  
+  AIC_values <- AIC(model6.5,model6.6,model6.7,model6.8)
+  BIC_values <- BIC(model6.5,model6.6,model6.7,model6.8)
+  model_comp_t<- data.frame(
+    Model = paste0(c("Model 6.5","Model 6.6","Model 6.7","Model 6.8"),"_",t),
+    AIC = AIC_values$AIC,
+    BIC = BIC_values$BIC
+  )
+  model_comparison<-rbind(model_comparison,
+                          model_comp_t)
+  rm(model_comp_t)
+}
+
+
+
 model_comparison |> 
   arrange(AIC,BIC)
 
-
-model6<-model6.7
+model6<-glmmTMB(metric_val~(pca_sc|species)+pca_sc+I(pca_sc^2)*pca1,
+                data=data_inv_sp)
 rm(model6.0,model6.1, model6.2,model6.3,model6.4,model6.5,model6.6,model6.7,model6.8,
    model_comparison, AIC_values,BIC_values)
 
@@ -936,7 +990,7 @@ plot(sim_res)
 ## draw effects
 summary(model6)
 ae6<-allEffects(model6)
-plot_6<-as.data.frame(ae6$`I(pca_sc^2):pca1`) |>
+plot_6<-as.data.frame(ae6$`I(pca_sc^2):pca1`) |> 
   filter(pca1 %in% c(-2,0.7,3)) |> 
   mutate(`Competive ability`=factor(case_when(pca1==-2~"Low",
                                               pca1==0.7~"Medium",
@@ -991,8 +1045,8 @@ data_inv<- performance %>%
 
 ## plots
 ggplot(data_inv) +
-  geom_line(aes(pca_sc,inv_dif, group=interaction(elast,species_combination)),color="grey")+
-  geom_point(aes(pca_sc,inv_dif,color=nih, group=interaction(elast,species_combination)),size=1)+
+  geom_line(aes(pca_sc,metric_val, group=interaction(elast,species_combination)),color="grey")+
+  geom_point(aes(pca_sc,metric_val,color=nih, group=interaction(elast,species_combination)),size=1)+
   geom_hline(yintercept = 0)+
   scale_color_gradientn(colours = viridis(15))+
   theme_bw()+
@@ -1074,7 +1128,9 @@ plot(sim_res)
 
 
 ae7<-allEffects(model7)
-plot_7 <- as.data.frame(ae7$`pca_sc:nih_pca1`) |> 
+
+
+plot_7 <- as.data.frame(ae7$`pca_sc:nih_pca1`) |>
   filter(nih_pca1%in%c(-5,-0.1,4)) |>
   mutate(nih_pca1=factor(case_when(nih_pca1==-5~"High competition",
                                    nih_pca1==-0.1~"Medium competition",
