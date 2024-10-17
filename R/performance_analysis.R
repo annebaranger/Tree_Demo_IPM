@@ -18,7 +18,7 @@ tar_load(species.list.disturbance)
 tar_load(mean_demo)
 
 pca=prcomp(mean_demo[,c("inv_50","ba_equil")],scale=TRUE,center=TRUE)
-# factoextra::fviz_pca_var(pca)
+factoextra::fviz_pca_var(pca)
 
 mean_demo$pca1<-pca$x[,1]
 
@@ -30,6 +30,7 @@ traits<-read.csv("data/traits_complete.csv") %>%
               mutate(species=gsub(" ","_",species))) %>% 
   rename(inv_sp=inv_50)
 
+traits |> ggplot(aes(shade,pca1))+geom_point()+geom_smooth()
 rm(pca,mean_demo)
 
 # compute mean climate var by categories
@@ -56,6 +57,10 @@ species.combination.select<- tar_read(species.combination.select) %>%
 load("performance.RData")
 }
 
+performance |> left_join(traits |> mutate(species=gsub("_"," ",species))) |> 
+  group_by(species,shade,inv_sp,ba_equil) |> filter(metric=="inv_50") |> summarise(inv_max=max(metric_val,na.rm=TRUE)) ->tt 
+pca=prcomp(tt[,c("inv_max","inv_sp")],scale=TRUE,center=TRUE)
+factoextra::fviz_pca_var(pca)
 #### Species exclusion ####
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # species.combination.excl$smallcombi<-NA
@@ -385,6 +390,7 @@ rm(data_exclu)
 ## data
 data_maint_sp<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  # rename(pca_sc=pca1) |> 
   filter(species==gsub("_"," ",species_combination)) |> 
   filter(metric=="ba_dif") |> 
   left_join(traits %>% mutate(species=gsub("_"," ",species)))  
@@ -469,20 +475,20 @@ ae2<-allEffects(model2)
 plot(ae2)
 plot_2<-as.data.frame(ae2$`I(pca_sc^2):pca1`) |> 
   filter(pca1%in%c(-2,0.7,3)) |>
-  mutate(`Competive ability`=factor(case_when(pca1==-2~"Low",
+  mutate(`Competitive ability`=factor(case_when(pca1==-2~"Low",
                                               pca1==0.7~"Medium",
                                               pca1==3~"High"),
                                     levels=c("Low","Medium","High"))) |> 
   ggplot()+
-  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competive ability`),alpha=0.2)+
-  geom_line(aes(pca_sc,fit,color=`Competive ability`))+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper,fill=`Competitive ability`),alpha=0.2)+
+  geom_line(aes(pca_sc,fit,color=`Competitive ability`))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Climatic range scaled by species \n (cold/humid -> hot/dry)",
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
        y="Basal area at equilibrium \n (m2/Ha)")
-
+plot_2
 ggsave(plot=plot_2,
        filename= "figure/sfe/Ba_quil_sp.png",
        dpi=600,
@@ -522,7 +528,7 @@ rm(plot_2,model2,sim_res,ae2,data_maint_sp)
 # with species combination
 ## data
 data_maint<-performance %>% 
-  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>%
   filter(metric=="ba_dif") %>% 
   filter(!is.nan(nih_pca1)) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
@@ -621,9 +627,11 @@ plot_3<-as.data.frame(ae3$`pca_sc:nih_pca1`) |>
   geom_line(aes(pca_sc,fit,color=as.factor(nih_pca1)))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_y_continuous(limits = c(0, 1.1), breaks = c(0,0.25,0.5,0.75,1))+
+  geom_hline(yintercept = 1,linetype="dashed")+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+  labs(x="Climatic range scaled by species \n (hot/dry -> cold/humid)",
        y="BA at equilibrium / BA of pure stand",
        color="Target species\n submitted to : ",
        fill="Target species\n submitted to : ")
@@ -662,6 +670,12 @@ data_resilience_sp |>
   geom_point(aes(group=species,color=pca1))+
   geom_smooth()+
   facet_wrap(~species)
+data_resilience_sp |> 
+  group_by(species) |> 
+  ggplot(aes(pca_sc,metric_val))+
+  geom_point(aes(group=species,color=pca1))+
+  geom_line(aes(group=species,color=pca1))
+
 data_resilience_sp |> 
   group_by(species) |> 
   mutate(metric_val=scale(metric_val,scale = TRUE,center=FALSE)) |>
@@ -758,7 +772,7 @@ plot_4<-as.data.frame(ae4$`I(pca_sc^2):inv_sp`) |>
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
        y="Resilience (1/m2)")
 
 ggsave(plot=plot_4,
@@ -884,7 +898,9 @@ plot_5<-as.data.frame(ae5$`pca_sc:nih_inv_sp`) |>
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+  scale_y_continuous(limits = c(0, 3.1), breaks = c(0,0.25,0.5,0.75,1,1.5,2,3))+
+  geom_hline(yintercept = 1,linetype="dashed")+
+  labs(x="Climatic range scaled by species \n (hot/dry -> cold/humid)",
        y="Resilience in competition / pure stand ",
        color="Target species \n submitted to:",
        fill="Target species \n submitted to:")
@@ -1003,7 +1019,7 @@ plot_6<-as.data.frame(ae6$`I(pca_sc^2):pca1`) |>
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
   theme_classic()+
   theme(text = element_text(size=10))+
-  labs(x="Climatic range scaled by species \n (cold/humid -> hot/dry)",
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
        y="Invasion rate \n (m2/year)")
 
 
@@ -1141,7 +1157,9 @@ plot_7 <- as.data.frame(ae7$`pca_sc:nih_pca1`) |>
   geom_line(aes(pca_sc,fit,color=nih_pca1))+
   scale_color_manual(values=c("burlywood1","tan1","tan4"))+
   scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
-  labs(x="Relative niche of species (cold/humid -> hot/dry)",
+  scale_y_continuous(limits = c(0, 1.1), breaks = c(0,0.25,0.5,0.75,1))+
+  geom_hline(yintercept = 1,linetype="dashed")+
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
        y="Invasion rate in competition / pure stand",
        color="Target species \n submitted to:",
        fill="Target species \n submitted to:")+
@@ -1155,6 +1173,38 @@ ggsave(plot=plot_7,
        units = "cm")
 
 rm(plot_7,model7,sim_res,ae7,data_inv)   
+
+
+#### Common plots ####
+#%%%%%%%%%%%%%%%%%%%
+
+cowplot::plot_grid(plot_2+theme(legend.position = "none"),
+                   plot_6+theme(legend.position = "none"),
+                   plot_4+theme(legend.position = "none"),
+                   ggpubr::get_legend(plot_2),
+                   rel_widths = c(1,1,1,0.4),
+                   ncol=4)->p
+ggsave(plot=p,
+       filename= "figure/sfe/pure_stand.png",
+       dpi=600,
+       width=30,
+       height = 9,
+       units = "cm")
+
+
+
+cowplot::plot_grid(plot_3+theme(legend.position = "none"),
+                   plot_7+theme(legend.position = "none"),
+                   ggpubr::get_legend(plot_3),
+                   rel_widths = c(1,1,0.3),
+                   ncol=3)->pp
+pp
+ggsave(plot=pp,
+       filename= "figure/sfe/inv_maintenance.png",
+       dpi=600,
+       width=30,
+       height = 9,
+       units = "cm")
 
 
 #### competition ####

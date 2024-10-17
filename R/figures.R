@@ -56,7 +56,8 @@ species_object=tar_read(species_object_mu)
 tar_load(harv_rules.ref)
 sim.type="mu"
 tar_load(sim_equil.id)
-id_forest=96
+id_forest=90
+
 
 sp=species.combination[id_forest,"species"][[1]]
 s_p=gsub(" ","_",sp)
@@ -94,12 +95,13 @@ sim.in = sim_deter_forest(forest.in,
                             SurfEch = 0.03,
                             verbose = TRUE)
 sim.in %>% filter(var=="BAsp") %>% 
-  filter(species=="Abies_alba") %>% 
+  # filter(species=="Abies_alba") %>% 
   ggplot(aes(time,value,color=species))+
   geom_line()+
   theme_bw( )+
   theme(panel.grid=element_blank())+
-  labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
+  ylim(c(10,65))+
+  labs(y="Basal area (m2/ha)",x="Time (year)",color="Species")
 
 
 sim.in %>%
@@ -110,6 +112,44 @@ sim.in %>%
   theme(panel.grid=element_blank())+
   facet_wrap(~species,ncol=3)+
   labs(y="Density",x="Size", title="Size distribution at equilibrium")
+
+
+# species alone
+list.sp=list.species[1]
+forest.sp= new_forest(species = list.sp, harv_rules = harv_rules.ref)
+sim.sp = sim_deter_forest(forest.sp, 
+                          tlim = 4000,
+                          climate=species.combination[id_forest,c("sgdd", "wai", "sgddb",
+                                                                  "waib", "wai2", "sgdd2", 
+                                                                  "PC1", "PC2", "N", "SDM")],
+                          equil_time = 50000, 
+                          equil_dist = 2000, 
+                          equil_diff = 0.5, 
+                          harvest = "default", 
+                          SurfEch = 0.03,
+                          verbose = TRUE)
+sim.sp %>% filter(var=="BAsp") %>% 
+  # filter(species=="Abies_alba") %>% 
+  ggplot(aes(time,value,color=species))+
+  geom_line()+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  ylim(c(10,66))+
+  labs(y="Basal area (m2/ha)",x="Time (year)")
+
+rbind(sim.in |>
+        filter(species=="Abies_alba") |> 
+        mutate(sim="In competition"),
+      sim.sp |> 
+        mutate(sim="Species alone")) |>
+  filter(var=="BAsp") |> 
+  ggplot(aes(time,value,color=sim))+
+  geom_line(size=1)+
+  scale_color_manual(values=c("firebrick2","slateblue3"))+
+  theme_bw( )+
+  theme(panel.grid=element_blank())+
+  labs(y="Basal area (m2/ha)",x="Time (year)",color="")
+  
 
 
 # sim invasion
@@ -154,6 +194,8 @@ sim.inv %>% filter(var=="BAsp") %>%
   theme(panel.grid=element_blank())+
   labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
 
+
+sim.inv=readRDS("rds/Abies_alba/clim_7/sim_invasion/Abies_alba.Fagus_sylvatica.rds")
 # sim disturbance
 sim.dist=readRDS("rds/Abies_alba/clim_6/sim_disturbance/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
 sim.dist %>% filter(var=="BAsp") %>% 
