@@ -497,7 +497,30 @@ ggsave(plot=plot_2,
        units = "cm")
 rm(plot_2,model2,sim_res,ae2,data_maint_sp)       
   
-  
+
+# without traits
+
+model2=lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2),
+            data=data_maint_sp)
+
+## residuals
+sim_res <- simulateResiduals(model2)
+plot(sim_res)
+
+summary(model2)
+ae2<-allEffects(model2)
+plot(ae2)
+plot_22<-as.data.frame(ae2$`I(pca_sc^2)`) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
+  geom_line(aes(pca_sc,fit))+
+  theme_classic()+
+  theme(text = element_text(size=10))+
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
+       y="Abundance in late successionnal stage \n (m2/Ha)")
+plot_22
+rm(plot_2,model2,sim_res,ae2,data_maint_sp)     
+
 # Plot effect for shade level
 # shade_levels <- c(1, 3, 5)
 # 
@@ -783,6 +806,22 @@ ggsave(plot=plot_4,
        units = "cm")
 rm(plot_4,model4,sim_res,ae4,data_resilience_sp)   
 
+## alone
+model4=glmmTMB(metric_val~(pca_sc|species)+pca_sc,
+               data=data_resilience_sp)
+ae4<-allEffects(model4) 
+plot_44<-as.data.frame(ae4$pca_sc) |> 
+  mutate(fit=exp(fit),
+         lower=exp(lower),
+         upper=exp(upper)) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
+  geom_line(aes(pca_sc,fit))+
+  theme_classic()+
+  theme(text = element_text(size=10))+
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
+       y="Resilience (1/m2)")
+plot_44
 
 # with species combination ###
 
@@ -1031,7 +1070,19 @@ ggsave(plot=plot_6,
        units = "cm")
 rm(plot_6,model6,sim_res,ae6,data_inv_sp)   
 
-
+# without traits
+model6=model6.4
+ae6<-allEffects(model6)
+plot_66<-as.data.frame(ae6$`I(pca_sc^2)`) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
+  geom_line(aes(pca_sc,fit))+
+  scale_color_manual(values=c("burlywood1","tan1","tan4"))+
+  scale_fill_manual(values=c("burlywood1","tan1","tan4"))+
+  theme_classic()+
+  theme(text = element_text(size=10))+
+  labs(x="Climatic range scaled by species \n (hot/dry -> cold/humid)",
+       y="Growth in early successionnal stage \n (m2/year)")
 
 
 # model3 <- lmer(inv_dif ~(pca_sc|species) + pca_sc * nih + I(pca_sc^2) ,
@@ -1206,6 +1257,17 @@ ggsave(plot=pp,
        height = 9,
        units = "cm")
 
+cowplot::plot_grid(plot_22,
+                   plot_66,
+                   plot_44,
+                   ncol=3)->ppp
+ppp
+ggsave(plot=ppp,
+       filename= "figure/sfe/pure_stand_nocompet.png",
+       dpi=600,
+       width=30,
+       height = 9,
+       units = "cm")
 
 #### competition ####
 #%%%%%%%%%%%%%%%%%%%
