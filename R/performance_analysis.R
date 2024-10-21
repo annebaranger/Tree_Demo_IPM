@@ -499,10 +499,8 @@ rm(plot_2,model2,sim_res,ae2,data_maint_sp)
   
 
 # without traits
-
 model2=lmer(ba_target~(pca_sc|species)+pca_sc+I(pca_sc^2),
             data=data_maint_sp)
-
 ## residuals
 sim_res <- simulateResiduals(model2)
 plot(sim_res)
@@ -510,6 +508,27 @@ plot(sim_res)
 summary(model2)
 ae2<-allEffects(model2)
 plot(ae2)
+
+# Create a sequence of 'pca_sc' values
+pca_seq <- seq(min(data_maint_sp$pca_sc), max(data_maint_sp$pca_sc), length.out = 100)
+newdata <- data.frame(pca_sc = pca_seq) 
+predictions <- predict(model2, newdata = newdata,re.form=~0, se.fit = TRUE)
+pred_df <- cbind(newdata, fit = predictions$fit, se.fit = predictions$se.fit)
+
+# Calculate confidence intervals
+pred_df$lower <- pred_df$fit - 1.96 * pred_df$se.fit
+pred_df$upper <- pred_df$fit + 1.96 * pred_df$se.fit
+
+plot_222<-pred_df |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
+  geom_line(aes(pca_sc,fit))+
+  theme_classic()+
+  theme(text = element_text(size=10))+
+  labs(x="Climatic range scaled by species \n ( hot/dry -> cold/humid)",
+       y="Abundance in late successionnal stage \n (m2/Ha)")
+
+
 plot_22<-as.data.frame(ae2$`I(pca_sc^2)`) |> 
   ggplot()+
   geom_ribbon(aes(x=pca_sc,ymin=lower,ymax=upper),alpha=0.2)+
