@@ -21,6 +21,10 @@ fun_other<- FUNDIV_data %>%
 fun_sp<-FUNDIV_data %>% 
   filter(species==sp_ex) %>% 
   select(longitude,latitude,plotcode,species,pca1) %>% 
+  mutate(pca_brk=cut(pca1,  # Create climate categories based on PCA1
+                     breaks = quantile(pca1, probs = seq(0, 1, length.out = 10 + 1)),  # Use quantiles for equal-sized categories
+                     include.lowest = TRUE),
+         clim_id = as.factor(as.integer(factor(pca_brk)))) |> 
   unique()
 
 ggplot()+
@@ -32,6 +36,24 @@ ggplot()+
   theme_bw()+
   theme(panel.grid = element_blank())+
   labs(x="",y="",color="PCA first \naxis")
+
+color_palette <- colorRampPalette(c("red","orange","tan","green","blue"))
+colors <- color_palette(10)
+names(colors) <- levels(fun_sp$clim_id)
+
+ggplot()+
+  geom_sf(data=worldmap,fill="grey")+
+  geom_point(data=fun_other,aes(longitude,latitude),color="grey13",size=0.2)+
+  geom_point(data=fun_sp,aes(longitude,latitude,color=clim_id),size=0.8)+
+  scale_colour_manual(
+    name = "Climate \ncategories",
+    values = colors
+  ) +
+  ylim(c(35, 70)) + xlim(c(-10, 35))+
+  theme_bw()+
+  theme(panel.grid = element_blank())+
+  labs(x="",y="",color="Climate \ncategories")
+
 
 # distribution climate
 pca_breaks=seq(from=min(fun_sp$pca1,na.rm=TRUE),
