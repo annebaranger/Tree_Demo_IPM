@@ -19,14 +19,25 @@ data_maint_sp |>
   geom_smooth()
 
 
-response_var <- "ba_target"
+response_var <- "metric_val"
 fixed_predictor <- "pca_sc"
-predictors_list <- c("shade",  "inv_sp","pca1")
+predictors_list <- c("nih_shade", "nih_inv_sp","nih_pca1")
+# predictors_list <- c("shade", "inv_sp","pca1")
 group_var <- "species"
-data_name<-"data_maint_sp"
-generate_formulas <- function(response_var, fixed_predictor, predictors_list, group_var,data_name) {
+data_name<-"data_maint"
+mod_extension=",family = beta_family(link = \"logit\")"
+mod.type="glmmTMB"
+generate_formulas <- function(response_var, fixed_predictor, predictors_list,
+                              group_var,data_name,mod_extension,mod.type) {
   formulas<-list()
-  formulas[[1]] <- paste0("lmer(",response_var,"~ (1|", group_var, ")",",data=",data_name,")")
+  if(mod.type=="lmer"){
+    mod.ran="lmer("
+    mod.nran="lm("
+  }else{
+    mod.ran="glmmTMB("
+    mod.nran="glmmTMB("
+  }
+  formulas[[1]] <- paste0(mod.ran,response_var,"~ (1|", group_var, ")",mod_extension,",data=",data_name,")")
   for (pred in predictors_list) {
     formula_pred<-data.frame(model="model",
                          response=response_var,
@@ -56,13 +67,13 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list, gr
                                    interaction=="clim"~paste0(clim,":",predictor),
                                    interaction=="quad_clim"~paste0(quad_clim,":",predictor),
                                    interaction=="both"~paste0(clim,":",predictor,"+",quad_clim,":",predictor)),
-             clim=case_when(random.eff=="slope"&random.var=="clim"~paste0("(",clim,formula.random),
+             clim=case_when(random.eff=="slope"&random.var=="clim"~paste0(clim,"+(",clim,formula.random),
                             TRUE~clim),
-             quad_clim=case_when(random.eff=="slope"&random.var=="quad_clim"~paste0("(",quad_clim,formula.random),
+             quad_clim=case_when(random.eff=="slope"&random.var=="quad_clim"~paste0(quad_clim,"+(",quad_clim,formula.random),
                             TRUE~quad_clim),
-             predictor=case_when(random.eff=="slope"&random.var=="predictor"~paste0("(",predictor,formula.random),
+             predictor=case_when(random.eff=="slope"&random.var=="predictor"~paste0(predictor,"+ (",predictor,formula.random),
                             TRUE~predictor),
-             quad_pred=case_when(random.eff=="slope"&random.var=="quad_pred"~paste0("(",quad_pred,formula.random),
+             quad_pred=case_when(random.eff=="slope"&random.var=="quad_pred"~paste0(quad_pred,"+(",quad_pred,formula.random),
                             TRUE~quad_pred),
              rand=case_when(random.eff=="intercept"~formula.random,
                             TRUE~NA),
@@ -70,11 +81,13 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list, gr
                     ~if_else(.=="",NA,.))) |> 
       rowwise() |> 
       mutate(list.pred=list(na.omit(c(rand,clim,quad_clim,predictor,quad_pred,interaction))),
-             formula=case_when(random.eff=="none"~paste0("lm(",response,"~",
+             formula=case_when(random.eff=="none"~paste0(mod.nran,response,"~",
                                                          paste(list.pred,collapse = "+"),
+                                                         mod_extension,
                                                          ",data=",data_name,")"),
-                               random.eff!="none"~paste0("lmer(",response,"~",
+                               random.eff!="none"~paste0(mod.ran,response,"~",
                                                          paste(list.pred,collapse = "+"),
+                                                         mod_extension,
                                                          ",data=",data_name,")"))) |> 
       pull(formula)
     formulas<-c(formulas,formula_pred)
@@ -84,7 +97,7 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list, gr
 
 # Example usage
 
-formulas <- generate_formulas(response_var, fixed_predictor, predictors_list, group_var)
+formulas <- generate_formulas(response_var, fixed_predictor, predictors_list, group_var,data_name,mod_extension,mod.type)
 model_eval<-data.frame(formulas=unlist(formulas)) |> 
   mutate(model=paste0("model_",row_number()),
          AIC=NA_real_,
@@ -94,5 +107,68 @@ for(i in 1:dim(model_eval)[1]){
   
   # Add AIC in the table
   model_eval$AIC[i]= AIC(model_i)
-  model_eval$ncof[i]=dim(summary(model_i)$coefficients)[1]
+  if(mod.type=="lmer"){
+    model_eval$ncof[i]=dim(summary(model_i)$coefficients)[1]
+  }else{
+    model_eval$ncof[i]=dim(summary(model_i)$coefficients$cond)[1]
+    
+  }
 }
+
+# best_mod
+min_aic=min(model_eval$AIC)
+
+best_model<-model_eval |> filter(AIC<min_aic+10) |> 
+  filter(ncof==min(ncof)) |> 
+  filter(AIC==min(AIC)) |> 
+  pull(formulas)
+
+
+mod_maint<-eval(parse(text = best_model))
+
+sim_res <- simulateResiduals(mod_maint)
+plot(sim_res)
+
+# Define new data for predictions
+if(grepl("pca_sc",best_model)){
+  predictor=predictors_list[unlist(lapply(predictors_list,function(x)grepl(x,best_model)))]
+  if(length(predictor)>0){
+    new_data <- data.frame(
+      metric_val = 0,  # Dummy value, needed only for model.matrix
+      pca_sc = seq(min(data_maint$pca_sc), max(data_maint$pca_sc), length.out = 15)  # Full range of pca_sc
+    ) |> 
+      crossing(pred = unname(quantile(data_maint[[predictor]],probs = c(0.1,0.5,0.9))))  # Use typical or specific values for pca1)
+    colnames(new_data)[grepl("pred",colnames(new_data))]<-predictor
+  }else{
+    new_data <- data.frame(
+      metric_val = 0,  # Dummy value, needed only for model.matrix
+      pca_sc = seq(min(data_maint$pca_sc), max(data_maint$pca_sc), length.out = 15)  # Full range of pca_sc
+    ) 
+  }
+  
+  
+}
+
+# Obtain fixed effect predictions
+fixed_effects <- as.matrix(fixef(mod_maint))  # Extract fixed effects coefficients
+
+# Design matrix for the new data based on fixed effects
+X_fixed <- model.matrix(terms(mod_maint), new_data)
+
+# Predict mean values using fixed effects only
+new_data$predicted_mean <- X_fixed %*% fixed_effects
+
+# Compute standard errors for the fixed effect predictions
+# Get the variance-covariance matrix for the fixed effects
+vcov_fixed <- vcov(mod_maint)
+fixed_var <- diag(X_fixed %*% vcov_fixed %*% t(X_fixed))
+new_data$predicted_se <- sqrt(fixed_var)
+
+# Display the results
+# (aes(x=pca_sc,ymin=lower,ymax=upper,fill=as.factor(nih_pca1)),alpha=0.2)+
+new_data |> 
+  mutate(lwr=predicted_mean-1.96*predicted_se,
+         upr=predicted_mean+1.96*predicted_se) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,fill=as.factor(pca1)),alpha=0.2)+
+  geom_line(aes(pca_sc,predicted_mean,color=as.factor(pca1)))
