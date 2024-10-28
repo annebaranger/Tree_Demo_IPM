@@ -119,7 +119,7 @@ sim.in = sim_deter_forest(forest.in,
 sim.in %>% filter(var=="BAsp") %>% 
   # filter(species=="Abies_alba") %>% 
   ggplot(aes(time,value,color=species))+
-  geom_line()+
+  geom_line(size=0.81)+
   theme_bw( )+
   theme(panel.grid=element_blank())+
   ylim(c(10,65))+
@@ -211,10 +211,10 @@ sim.inv.void %>%
 sim.inv=readRDS("rds/Abies_alba/clim_6/sim_invasion/Abies_alba.Picea_abies.Pinus_sylvestris.rds")
 sim.inv %>% filter(var=="BAsp") %>% 
   ggplot(aes(time,value,color=species))+
-  geom_line()+
+  geom_line(size=0.81)+
   theme_bw( )+
   theme(panel.grid=element_blank())+
-  labs(y="Basal area (m2/ha)",x="Time (year)", title="Equilibrium simulation")
+  labs(y="Basal area (m2/ha)",x="Time (year)")#, title="Equilibrium simulation"
 
 
 sim.inv=readRDS("rds/Abies_alba/clim_7/sim_invasion/Abies_alba.Fagus_sylvatica.rds")
