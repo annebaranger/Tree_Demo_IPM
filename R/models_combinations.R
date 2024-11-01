@@ -251,7 +251,7 @@ for(i in 1:dim(best_model_trait)[1]){
     new_data$upr <- plogis(new_data$predicted_mean+1.96*new_data$predicted_se)
     new_data$predicted_mean <- plogis(X_fixed %*% fixed_effects)
   }else{
-    fixed_effects <- fixef(mod_maint)$cond  # Extract fixed effects coefficients
+    fixed_effects <- fixef(mod_maint)$cond  # Extract fixed effects coefficients  
     vcov_fixed <- vcov(mod_maint)$cond  
     X_fixed <- model.matrix(terms(mod_maint), new_data)
     new_data$predicted_mean <- X_fixed %*% fixed_effects
