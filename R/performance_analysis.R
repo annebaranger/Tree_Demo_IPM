@@ -22,14 +22,22 @@ factoextra::fviz_pca_var(pca)
 
 mean_demo$pca1<-pca$x[,1]
 
-traits<-read.csv("data/traits_complete.csv") %>%
-  select(species,shade) %>%
-  mutate(species=gsub(" ","_",species)) %>%
-  rename(shade=shade) %>% 
-  left_join(mean_demo[,c("species","ba_equil","inv_50","pca1")] %>% 
-              mutate(species=gsub(" ","_",species))) %>% 
-  rename(inv_sp=inv_50)
 
+load("inv_30.RData")
+# traits<-read.csv("data/traits_complete.csv") %>%
+#   select(species,shade) %>%
+#   mutate(species=gsub(" ","_",species)) %>%
+#   rename(shade=shade) %>% 
+#   left_join(mean_demo[,c("species","ba_equil","inv_50","pca1")] %>% 
+#               mutate(species=gsub(" ","_",species))) %>% 
+#   rename(inv_sp=inv_50)
+
+traits<-read.csv("data/traits_complete.csv") %>%
+  select(species,HM,WD) %>%
+  mutate(species=gsub(" ","_",species)) %>%
+  left_join(inv_30) |> 
+  rename(inv_sp=inv_30)
+GGally::ggpairs(traits[,c(2:4)])
 traits |> ggplot(aes(shade,pca1))+geom_point()+geom_smooth()
 rm(pca,mean_demo)
 
@@ -54,14 +62,14 @@ species.combination.select<- tar_read(species.combination.select) %>%
   dplyr::select(species,species_combination,n_species,excluded,competexcluded,
                 clim_id,pca1,pca2,wai,sgdd,clim_up,clim_low) 
   
-load("performance.RData")
+load("performance_2.RData")
 }
 
 performance |> left_join(traits |> mutate(species=gsub("_"," ",species))) |> 
   group_by(species,shade,inv_sp,ba_equil) |> filter(metric=="inv_50") |> summarise(inv_max=max(metric_val,na.rm=TRUE)) ->tt 
 pca=prcomp(tt[,c("inv_max","inv_sp")],scale=TRUE,center=TRUE)
 factoextra::fviz_pca_var(pca)
-#### Species exclusion ####
+# ### Species exclusion ####
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # species.combination.excl$smallcombi<-NA
 # for(i in 1:dim(species.combination.excl)[1]){
@@ -70,9 +78,9 @@ factoextra::fviz_pca_var(pca)
 #     sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
 #     # sp_combi=sp_combi[sp_combi!=s_p]
 #     sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
-#     
+# 
 #     new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
-#     ex<-species.combination.excl %>% 
+#     ex<-species.combination.excl %>%
 #       filter(species==species.combination.excl$species[i]&
 #                clim_id==species.combination.excl$clim_id[i]&
 #                species_combination==new_combi)
@@ -82,54 +90,54 @@ factoextra::fviz_pca_var(pca)
 #       species.combination.excl$smallcombi[i]="absent"
 #     }
 #   }
-#   
+# 
 # }
 # # for checking the proportion of combination represented after species exclusion
-# # species.combination.excl %>% 
-# #   filter(competexcluded!="") %>% 
-# #   filter(smallcombi=="absent") 
+# # species.combination.excl %>%
+# #   filter(competexcluded!="") %>%
+# #   filter(smallcombi=="absent")
 # 
-#### Performance metrics ####
+# ### Performance metrics ####
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # 
-# # get disturbance metrics from mean 
-# disturbance_metric<-tar_read(disturbance_ba) %>% 
+# # get disturbance metrics from mean
+# disturbance_metric<-tar_read(disturbance_ba) %>%
 #   mutate(elast="Abies_alba-amean",vr="mean") %>%
 #   dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
-# invasion_metric<-tar_read(invasion_ba) %>% 
+# invasion_metric<-tar_read(invasion_ba) %>%
 #   mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
-#   dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm)) 
+#   dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm))
 # 
 # 
 # # compute mean elasticity per vital rates, for each species combi/clim
-# disturbance <- disturbance_metric %>% 
-#   arrange(species,clim_id,species_combination,elast) %>% 
-#   pivot_longer(cols=matches(species.list.ipm)) %>% 
-#   left_join(traits, by = c("name" = "species")) %>% 
-#   group_by(species,elast,species_combination,clim_id,vr) %>% 
+# disturbance <- disturbance_metric %>%
+#   arrange(species,clim_id,species_combination,elast) %>%
+#   pivot_longer(cols=matches(species.list.ipm)) %>%
+#   left_join(traits, by = c("name" = "species")) %>%
+#   group_by(species,elast,species_combination,clim_id,vr) %>%
 #   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
-#                                TRUE~0)) %>% 
+#                                TRUE~0)) %>%
 #   pivot_longer(cols=colnames(traits)[-1],
 #                values_to = "trait_val",
-#                names_to = "trait_name") %>% 
-#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
+#                names_to = "trait_name") %>%
+#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>%
 #   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-#          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+#          ba_target=sum(value*ba_multiple,na.rm = TRUE),
 #          rel_ba_partner=ba_partner/(ba_target+ba_partner),
 #          nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
-#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
-#   ungroup() %>% 
+#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>%
+#   ungroup() %>%
 #   dplyr::select(-c("ba_multiple","trait_val")) %>%
 #   pivot_wider(values_from = c("nih","nid"),
-#               names_from = "trait_name") %>% 
+#               names_from = "trait_name") %>%
 #   pivot_wider(names_from = name,
-#               values_from = value) %>% 
-#   dplyr::select(!matches(species.list.ipm)) 
-# invasion <- invasion_metric %>% ungroup() %>% 
-#   arrange(species,species_combination,clim_id) %>% 
-#   pivot_longer(cols=matches(species.list.ipm)) %>% 
-#   left_join(traits, by = c("name" = "species")) %>% 
-#   group_by(species,elast,species_combination,clim_id,vr) %>% 
+#               values_from = value) %>%
+#   dplyr::select(!matches(species.list.ipm))
+# invasion <- invasion_metric %>% ungroup() %>%
+#   arrange(species,species_combination,clim_id) %>%
+#   pivot_longer(cols=matches(species.list.ipm)) %>%
+#   left_join(traits, by = c("name" = "species")) %>%
+#   group_by(species,elast,species_combination,clim_id,vr) %>%
 #   mutate(ba_multiple=case_when(name==gsub(" ","_",species)~1,
 #                                TRUE~0),
 #          value=case_when(!is.na(value)~1,
@@ -137,49 +145,49 @@ factoextra::fviz_pca_var(pca)
 #                          TRUE~value)) %>%  # *1 because invasion are made at constant basal area of compet
 #   pivot_longer(cols=colnames(traits)[-1],
 #                values_to = "trait_val",
-#                names_to = "trait_name") %>% 
-#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>% 
+#                names_to = "trait_name") %>%
+#   group_by(species,elast,species_combination,clim_id,vr,trait_name) %>%
 #   mutate(ba_partner=sum(value*abs(1-ba_multiple),na.rm = TRUE),
-#          ba_target=sum(value*ba_multiple,na.rm = TRUE), 
+#          ba_target=sum(value*ba_multiple,na.rm = TRUE),
 #          rel_ba_partner=ba_partner/(ba_target+ba_partner),
 #          nih=sum((sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner,
-#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>% 
-#   ungroup() %>% 
+#          nid=sum(abs(sum(trait_val*ba_multiple)-trait_val)*value,na.rm=TRUE)/ba_partner) %>%
+#   ungroup() %>%
 #   dplyr::select(-c("ba_multiple","trait_val")) %>%
 #   pivot_wider(values_from = c("nih","nid"),
-#               names_from = "trait_name") %>% 
+#               names_from = "trait_name") %>%
 #   pivot_wider(names_from = name,
-#               values_from = value) %>% 
-#   dplyr::select(!matches(species.list.ipm))%>% 
+#               values_from = value) %>%
+#   dplyr::select(!matches(species.list.ipm))%>%
 #   left_join(species.combination.excl,by=c("species","clim_id","species_combination"))
-# ba_dif<-tar_read(ba_dif) %>% 
-#   select(!matches(c('ba_target',"ba_partner","n_species"))) %>% 
-#   mutate(elast="Abies_alba-amean",vr="mean") 
+# ba_dif<-tar_read(ba_dif) %>%
+#   select(!matches(c('ba_target',"ba_partner","n_species"))) %>%
+#   mutate(elast="Abies_alba-amean",vr="mean")
 # 
 # 
 # # gather all data
-# performance <-invasion %>% 
-#   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>% 
-#   left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>% 
-#   arrange(species,clim_id,species_combination,elast,vr) %>% 
+# performance <-invasion %>%
+#   left_join(disturbance,by=c("species","elast","species_combination","clim_id","vr")) %>%
+#   left_join(ba_dif,by=c("species","elast","species_combination","clim_id","vr"))%>%
+#   arrange(species,clim_id,species_combination,elast,vr) %>%
 #   pivot_longer(cols=c("resilience","recovery","resistance","inv_mean","inv_max",
 #                       "inv_50","BA_100","BA_500","BA_1000","ba_dif"),
 #                names_to="metric",
-#                values_to="metric_val") %>% 
-#   arrange(species,clim_id,elast,species_combination)%>% 
-#   pivot_longer(cols=matches("\\.x|\\.y")) %>% 
+#                values_to="metric_val") %>%
+#   arrange(species,clim_id,elast,species_combination)%>%
+#   pivot_longer(cols=matches("\\.x|\\.y")) %>%
 #   mutate(name_upd=gsub("\\.x$|\\.y$", "", name),
-#          name=str_sub(name,-1)) %>% 
+#          name=str_sub(name,-1)) %>%
 #   pivot_wider(names_from = name,
-#               values_from = value) %>% 
+#               values_from = value) %>%
 #   mutate(compet_val=case_when(metric%in%c("inv_mean","inv_max","inv_50","BA_100","BA_500","BA_1000")~x,
-#                               TRUE~y)) %>% 
-#   select(-c("x","y")) %>% 
+#                               TRUE~y)) %>%
+#   select(-c("x","y")) %>%
 #   pivot_wider(names_from = name_upd,
 #               values_from = compet_val)
-#   # filter(excluded!="excluded") %>% 
+#   # filter(excluded!="excluded") %>%
 #   # filter(is.na(smallcombi)|smallcombi!="present")
-#   save(performance,file = "performance.RData")
+#   save(performance,file = "performance_2.RData")
 
 
 #### Plots ####

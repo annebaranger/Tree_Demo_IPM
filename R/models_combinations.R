@@ -16,7 +16,7 @@ eval(parse(text=paste0("data_mod<-",data_name)))
 data_mod[[response_var]]<-data_mod[[response_name]]
 
 fixed_predictor <- "pca_sc"
-predictors_list <- c("shade", "inv_sp","pca1")
+predictors_list <- c("HM", "inv_sp","WD")
 group_var <- "species"
 mod_extension=""
 mod.type="lmer"
@@ -24,9 +24,9 @@ mod.type="lmer"
 data_maint<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>%
   filter(metric=="ba_dif") %>% 
-  filter(!is.nan(nih_pca1)) %>% 
+  filter(!is.nan(nih_HM)) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
-  mutate(species=forcats::fct_reorder(species, shade),
+  mutate(species=forcats::fct_reorder(species, HM),
          simul_state=case_when(!is.na(smallcombi)~"CompetitorExclusion",
                                excluded=="excluded"~"SpeciesExclusion",
                                TRUE~"SpeciesCoex"),
@@ -40,7 +40,7 @@ response_var <- "response"
 eval(parse(text=paste0("data_mod<-",data_name)))
 data_mod[[response_var]]<-data_mod[[response_name]]
 fixed_predictor <- "pca_sc"
-predictors_list <- c("nih_shade", "nih_inv_sp","nih_pca1")
+predictors_list <- c("nih_HM", "nih_inv_sp","nih_WD")
 group_var <- "species"
 mod_extension=",family = beta_family(link = \"logit\")"
 mod.type="glmmTMB"
@@ -61,7 +61,7 @@ response_var <- "response"
 eval(parse(text=paste0("data_mod<-",data_name)))
 data_mod[[response_var]]<-data_mod[[response_name]]
 fixed_predictor <- "pca_sc"
-predictors_list <- c("shade","ba_equil","inv_sp","pca1")
+predictors_list <-  c("HM", "inv_sp","WD")
 group_var <- "species"
 mod_extension=""
 mod.type="glmmTMB"
@@ -89,10 +89,57 @@ response_var <- "response"
 eval(parse(text=paste0("data_mod<-",data_name)))
 data_mod[[response_var]]<-data_mod[[response_name]]
 fixed_predictor <- "pca_sc"
-predictors_list <- c("nih_shade","nih_ba_equil","nih_inv_sp","nih_pca1")
+predictors_list <- c("nih_HM", "nih_inv_sp","nih_WD")
 group_var <- "species"
 mod_extension=""
 mod.type="glmmTMB"
+
+## invasion 
+data_inv_sp<-performance %>% 
+  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
+  filter(metric=="inv_50") %>% 
+  filter(species==gsub("_"," ",species_combination))
+data_name<-"data_inv_sp"
+response_name <- "metric_val" 
+response_var <- "response"
+eval(parse(text=paste0("data_mod<-",data_name)))
+data_mod[[response_var]]<-data_mod[[response_name]]
+fixed_predictor <- "pca_sc"
+predictors_list <-  c("HM", "inv_sp","WD")
+group_var <- "species"
+mod_extension=""
+mod.type="glmmTMB"
+
+data_inv<- performance %>% 
+  left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
+  filter(metric=="inv_50") %>% 
+  left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
+  rowwise() %>% 
+  mutate(n_species=length(strsplit(species_combination,"\\.")[[1]])) %>% 
+  ungroup() %>% 
+  group_by(species,clim_id) %>% 
+  arrange(species,clim_id,n_species) %>% 
+  mutate(inv_dif=metric_val/metric_val[1]) %>% 
+  ungroup() %>% 
+  mutate(nih=case_when(is.nan(nih_inv_sp)~0,
+                       TRUE~nih_inv_sp),
+         inv_dif=case_when(inv_dif<0~0,
+                           TRUE~inv_dif),
+         inv_dif=(inv_dif * (dim(.)[1] - 1) + 0.5) / dim(.)[1]) %>% 
+  filter(!species%in%c("Pinus pinaster","Pinus pinea")) %>% 
+  filter(species!=gsub("_"," ",species_combination))
+data_name<-"data_inv"
+response_name <- "inv_dif" 
+response_var <- "response"
+eval(parse(text=paste0("data_mod<-",data_name)))
+data_mod[[response_var]]<-data_mod[[response_name]]
+fixed_predictor <- "pca_sc"
+predictors_list <- c("nih_HM", "nih_inv_sp","nih_WD")
+group_var <- "species"
+mod_extension=",family = beta_family(link = \"logit\")"
+mod.type="glmmTMB"
+
 generate_formulas <- function(response_var, fixed_predictor, predictors_list,
                               group_var,mod_extension,mod.type) {
   formulas<-list()
@@ -113,7 +160,7 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list,
       crossing(quad_pred=c("",paste0("I(",pred,"^2)") )) |> 
       crossing(data.frame(random.eff=c("none","intercept","slope"),
                           formula.random=c("",paste0("(1|", group_var, ")"),paste0( "|", group_var, ")")))) |> 
-      crossing(random.var=c("clim","quad_clim","predictor","quad_pred")) |> 
+      crossing(random.var=c("clim","quad_clim")) |> #,"predictor","quad_pred"
       crossing(interaction=c("none","clim","quad_clim","both")) |> 
       mutate(random.var=case_when(random.eff!="slope"~"",
                                   TRUE~random.var)) |> unique() |> 
@@ -202,6 +249,8 @@ best_model_trait<-model_eval |>
   filter(ncof==min(ncof)) |> 
   filter(AIC==min(AIC)) 
 
+predict_traits<-setNames(data.frame(matrix(nrow = 0,ncol = 9)),
+                         nm=c('response','pca_sc','trait','trait_value','predicted_mean','predicted_se','lwr','upr','pred'))
 for(i in 1:dim(best_model_trait)[1]){
   best_model=best_model_trait$formulas[i]
   
@@ -219,7 +268,7 @@ for(i in 1:dim(best_model_trait)[1]){
         response = 0,  # Dummy value, needed only for model.matrix
         pca_sc = seq(min(data_mod$pca_sc), max(data_mod$pca_sc), length.out = 15)  # Full range of pca_sc
       ) |> 
-        crossing(pred = unname(quantile(data_mod[[predictor]],probs = c(0.0,0.5,1))))  # Use typical or specific values for pca1)
+        crossing(pred = unname(quantile(data_mod[[predictor]],probs = c(0.05,0.5,0.95))))  # Use typical or specific values for pca1)
       colnames(new_data)[grepl("pred",colnames(new_data))]<-predictor
     }else{
       new_data <- data.frame(
@@ -261,15 +310,48 @@ for(i in 1:dim(best_model_trait)[1]){
     new_data$upr <- exp(new_data$predicted_mean+1.96*new_data$predicted_se)
     new_data$predicted_mean <- exp(X_fixed %*% fixed_effects)
   }
-  if(length(predictor)>0){new_data$pred<-new_data[[predictor]]}
+  if(length(predictor)>0){
+    new_data$pred<-new_data[[predictor]]
+    new_data$pred_name=predictor
+    new_data<-new_data[,-match(predictor,colnames(new_data))]
+  }else{
+    new_data$pred<-NA
+    new_data$pred_name<-"none"
+  }
   
-  new_data |> 
-    ggplot()+
-    geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,fill=as.factor(pred)),alpha=0.2)+
-    geom_line(aes(pca_sc,predicted_mean,color=as.factor(pred)))+
-    labs(color=paste0("Categories of ",predictor),
-         fill=paste0("Categories of ",predictor),
-         y=response_name)->plot
-  print(plot)
+  predict_traits<-bind_rows(predict_traits,
+                            new_data )
+  
+  # new_data |> 
+  #   ggplot()+
+  #   geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,fill=as.factor(pred)),alpha=0.2)+
+  #   geom_line(aes(pca_sc,predicted_mean,color=as.factor(pred)))+
+  #   labs(color=paste0("Categories of ",predictor),
+  #        fill=paste0("Categories of ",predictor),
+  #        y=response_name,
+  #        title=paste0(best_model))->plot
+  # print(plot)
   
 }
+
+predict_traits |> 
+  group_by(pred_name) |> 
+  mutate(pred_cat=case_when(pred==min(pred)~"High compet",
+                            pred==max(pred)~"Low compet",
+                            TRUE~"Medium compet"),
+         pred_cat=factor(pred_cat,levels=c("Low compet","Medium compet","High compet")),
+         pred_name=factor(pred_name,levels=c("none",predictors_list))) |> 
+  ggplot()+
+  geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,
+                  fill=pred_cat),
+              alpha=0.2)+
+  geom_line(aes(pca_sc,predicted_mean,color=pred_cat),
+            size=1)+
+  labs(color=paste0("Categories of ",predictor),
+       fill=paste0("Categories of ",predictor),
+       y=response_name,
+       title=paste0(best_model))+
+  scale_color_manual(values=c("darkseagreen","darksalmon","darkred"))+
+  scale_fill_manual(values=c("darkseagreen","darksalmon","darkred"))+
+  facet_wrap(~pred_name,scales="free_y")+
+  theme_classic()
