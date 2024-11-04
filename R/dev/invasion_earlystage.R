@@ -94,6 +94,7 @@ inv_30<-bind_rows(inv_30,
                              inv_30=quersube$inv_30[[1]]))
 save(inv_30,file="inv_30.RData")
 load("inv_30.RData")
+load("sim_tot_inv_30.RData")
 # save(sim_tot,file="sim_tot_inv_30.RData")
 # load("inv_18.RData")
 
@@ -114,14 +115,14 @@ traits<-read.csv("data/traits_complete.csv") |>
   left_join(inv_30|> mutate(species=gsub("_"," ",species))) |> 
   left_join(mean_demo) |> 
   # left_join(traits_MASTIF|> mutate(species=gsub("_"," ",species))) |> 
-  # left_join(traits_nfi) |> 
+  # left_join(traits_nfi) |>
   # select(-c(pca1,pca2,taxa,sgdd,wai,sgddb,waib,wai2,sgdd2,bark.thickness_mm)) |> 
   drop_na() 
 GGally::ggpairs(traits[,c(3:20)])
 # c('shade','SLA','LN','LT','WD','HM','inv_18','ba_equil','inv_50','height.dbh.ratio','growth.max')
 #c(shade','SLA','LN','LT','WD','HM','inv_18','inv_30','ba_equil','inv_50','TSM','sla','wood_density','seed_size','SSP','height.dbh.ratio','growth.max','RGR')
 pca_traits<-prcomp(traits[,c('inv_30',
-                             'HM',
+                             "HM",
                              'WD')],center=TRUE,scale=TRUE) #c(4:9,12:14)
 
 factoextra::fviz_pca_var(pca_traits)
