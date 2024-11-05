@@ -23,7 +23,8 @@ factoextra::fviz_pca_var(pca)
 mean_demo$pca1<-pca$x[,1]
 
 
-load("inv_30.RData")
+# load("inv_30.RData")
+load("trait_rec.RData")
 # traits<-read.csv("data/traits_complete.csv") %>%
 #   select(species,shade) %>%
 #   mutate(species=gsub(" ","_",species)) %>%
@@ -35,10 +36,10 @@ load("inv_30.RData")
 traits<-read.csv("data/traits_complete.csv") %>%
   select(species,HM,WD) %>%
   mutate(species=gsub(" ","_",species)) %>%
-  left_join(inv_30) |> 
-  rename(inv_sp=inv_30)
+  left_join(traits_rec) |> 
+  rename(inv_sp=recruitment)
 GGally::ggpairs(traits[,c(2:4)])
-traits |> ggplot(aes(shade,pca1))+geom_point()+geom_smooth()
+# traits |> ggplot(aes(shade,pca1))+geom_point()+geom_smooth()
 rm(pca,mean_demo)
 
 # compute mean climate var by categories
@@ -62,7 +63,8 @@ species.combination.select<- tar_read(species.combination.select) %>%
   dplyr::select(species,species_combination,n_species,excluded,competexcluded,
                 clim_id,pca1,pca2,wai,sgdd,clim_up,clim_low) 
   
-load("performance_2.RData")
+# load("performance_2.RData") # with new traits
+load("performance_3.RData") # with new traits & recruitment
 }
 
 performance |> left_join(traits |> mutate(species=gsub("_"," ",species))) |> 
@@ -104,7 +106,7 @@ factoextra::fviz_pca_var(pca)
 # disturbance_metric<-tar_read(disturbance_ba) %>%
 #   mutate(elast="Abies_alba-amean",vr="mean") %>%
 #   dplyr::select(species,elast,species_combination,clim_id,vr,resilience,resistance,recovery,matches(species.list.ipm))
-# invasion_metric<-tar_read(invasion_ba) %>%
+# invasion_metric<-tar_read(invasion_ba_2) %>%
 #   mutate(elast="Abies_alba-amean",vr="mean") %>% ## attention erruer
 #   dplyr::select(species,elast,species_combination,clim_id,vr,inv_mean,inv_max,inv_50,BA_100,BA_500,BA_1000,matches(species.list.ipm))
 # 
@@ -187,7 +189,7 @@ factoextra::fviz_pca_var(pca)
 #               values_from = compet_val)
 #   # filter(excluded!="excluded") %>%
 #   # filter(is.na(smallcombi)|smallcombi!="present")
-#   save(performance,file = "performance_2.RData")
+#   save(performance,file = "performance_3.RData")
 
 
 #### Plots ####

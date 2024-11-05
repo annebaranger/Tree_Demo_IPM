@@ -120,15 +120,18 @@ data_inv<- performance %>%
   ungroup() %>% 
   group_by(species,clim_id) %>% 
   arrange(species,clim_id,n_species) %>% 
-  mutate(inv_dif=metric_val/metric_val[1]) %>% 
+  mutate(inv_dif=metric_val/metric_val[1],
+         linv_dif=log(inv_dif)) %>% 
   ungroup() %>% 
   mutate(nih=case_when(is.nan(nih_inv_sp)~0,
-                       TRUE~nih_inv_sp),
-         inv_dif=case_when(inv_dif<0~0,
-                           TRUE~inv_dif),
-         inv_dif=(inv_dif * (dim(.)[1] - 1) + 0.5) / dim(.)[1]) %>% 
-  filter(!species%in%c("Pinus pinaster","Pinus pinea")) %>% 
-  filter(species!=gsub("_"," ",species_combination))
+                       TRUE~nih_inv_sp)#,
+         # inv_dif=case_when(inv_dif<0~0,
+         #                   TRUE~inv_dif),
+         # inv_dif=(inv_dif * (dim(.)[1] - 1) + 0.5) / dim(.)[1]
+         ) %>% 
+  # filter(!species%in%c("Pinus pinaster","Pinus pinea")) %>% 
+  filter(species!=gsub("_"," ",species_combination)) |> 
+  filter(!is.infinite(linv_dif))
 data_name<-"data_inv"
 response_name <- "inv_dif" 
 response_var <- "response"
@@ -137,7 +140,7 @@ data_mod[[response_var]]<-data_mod[[response_name]]
 fixed_predictor <- "pca_sc"
 predictors_list <- c("nih_HM", "nih_inv_sp","nih_WD")
 group_var <- "species"
-mod_extension=",family = beta_family(link = \"logit\")"
+mod_extension=",family = Gamma(link = \"log\")" #",family = beta_family(link = \"logit\")"
 mod.type="glmmTMB"
 
 generate_formulas <- function(response_var, fixed_predictor, predictors_list,
@@ -157,7 +160,7 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list,
                          clim=fixed_predictor) |> 
       crossing(quad_clim=c("",paste0("I(",fixed_predictor,"^2)"))) |> 
       crossing(predictor=c("",pred)) |>
-      crossing(quad_pred=c("",paste0("I(",pred,"^2)") )) |> 
+      crossing(quad_pred=c("")) |> #,paste0("I(",pred,"^2)") 
       crossing(data.frame(random.eff=c("none","intercept","slope"),
                           formula.random=c("",paste0("(1|", group_var, ")"),paste0( "|", group_var, ")")))) |> 
       crossing(random.var=c("clim","quad_clim")) |> #,"predictor","quad_pred"
@@ -299,6 +302,16 @@ for(i in 1:dim(best_model_trait)[1]){
     new_data$lwr <- plogis(new_data$predicted_mean-1.96*new_data$predicted_se)
     new_data$upr <- plogis(new_data$predicted_mean+1.96*new_data$predicted_se)
     new_data$predicted_mean <- plogis(X_fixed %*% fixed_effects)
+  }else if(grepl("Gamma",mod_extension)){
+    fixed_effects <- fixef(mod_maint)$cond  # Extract fixed effects coefficients
+    vcov_fixed <- vcov(mod_maint)$cond  
+    X_fixed <- model.matrix(terms(mod_maint), new_data)
+    new_data$predicted_mean <- X_fixed %*% fixed_effects
+    fixed_var <- diag(X_fixed %*% vcov_fixed %*% t(X_fixed))
+    new_data$predicted_se <- sqrt(fixed_var)
+    new_data$lwr <- exp(new_data$predicted_mean-1.96*new_data$predicted_se)
+    new_data$upr <- exp(new_data$predicted_mean+1.96*new_data$predicted_se)
+    new_data$predicted_mean <- exp(X_fixed %*% fixed_effects)
   }else{
     fixed_effects <- fixef(mod_maint)$cond  # Extract fixed effects coefficients  
     vcov_fixed <- vcov(mod_maint)$cond  

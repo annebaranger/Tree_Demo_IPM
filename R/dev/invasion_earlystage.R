@@ -114,6 +114,7 @@ traits<-read.csv("data/traits_complete.csv") |>
   # left_join(inv_18_2 |> mutate(species=gsub("_"," ",species))) |> 
   left_join(inv_30|> mutate(species=gsub("_"," ",species))) |> 
   left_join(mean_demo) |> 
+  left_join(traits_rec|> mutate(species=gsub("_"," ",species)))
   # left_join(traits_MASTIF|> mutate(species=gsub("_"," ",species))) |> 
   # left_join(traits_nfi) |>
   # select(-c(pca1,pca2,taxa,sgdd,wai,sgddb,waib,wai2,sgdd2,bark.thickness_mm)) |> 
@@ -121,7 +122,7 @@ traits<-read.csv("data/traits_complete.csv") |>
 GGally::ggpairs(traits[,c(3:20)])
 # c('shade','SLA','LN','LT','WD','HM','inv_18','ba_equil','inv_50','height.dbh.ratio','growth.max')
 #c(shade','SLA','LN','LT','WD','HM','inv_18','inv_30','ba_equil','inv_50','TSM','sla','wood_density','seed_size','SSP','height.dbh.ratio','growth.max','RGR')
-pca_traits<-prcomp(traits[,c('inv_30',
+pca_traits<-prcomp(traits[,c('recruitment',
                              "HM",
                              'WD')],center=TRUE,scale=TRUE) #c(4:9,12:14)
 

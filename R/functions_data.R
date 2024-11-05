@@ -1469,7 +1469,7 @@ make_simulations_invasion_3 = function(species.combination,
                                 verbose = TRUE)
     }
     sim.in<-sim.in |> filter(var%in%c("N","BAsp"))
-  } 
+
   
   forest.file=paste0("rds/", s_p, "/clim_", clim,
                      "/sim_invasion/", species.comb, ".rds")
@@ -2378,7 +2378,7 @@ get_invasion_rate_2<-function(species.combination,
                   inv_max=max(der,na.rm=TRUE))
       
       inv.2<-derivative.i |> 
-        filter(time<delay.i+50) |> 
+        filter(time<15) |> 
         summarise(inv_50=mean(der,na.rm=TRUE))
       out[out$simul_eq==id.sim.i,c("inv_mean","inv_max","inv_50",
                                    "BA_100","BA_500","BA_1000")]=
