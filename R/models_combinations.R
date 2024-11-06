@@ -1,7 +1,8 @@
 ## automatize test of different model forms and predictions of uncertainties
 
 
-## maintenance
+## maintenance ####
+#%%%%%%%%%%%%%%%%%%
 
 data_maint_sp<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
@@ -45,7 +46,8 @@ group_var <- "species"
 mod_extension=",family = beta_family(link = \"logit\")"
 mod.type="glmmTMB"
 
-## resilience
+## resilience ####
+#%%%%%%%%%%%%%%%%%
 data_resilience_sp<- performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
@@ -94,7 +96,8 @@ group_var <- "species"
 mod_extension=""
 mod.type="glmmTMB"
 
-## invasion 
+## invasion ####
+#%%%%%%%%%%%%%%%
 data_inv_sp<-performance %>% 
   left_join(mean_pca[,c("species","clim_id","pca_sc")]) %>% 
   left_join(traits %>% mutate(species=gsub("_"," ",species))) %>% 
@@ -143,6 +146,9 @@ group_var <- "species"
 mod_extension=",family = Gamma(link = \"log\")" #",family = beta_family(link = \"logit\")"
 mod.type="glmmTMB"
 
+
+## Functions ####
+#%%%%%%%%%%%%%%%%
 generate_formulas <- function(response_var, fixed_predictor, predictors_list,
                               group_var,mod_extension,mod.type) {
   formulas<-list()
@@ -211,7 +217,8 @@ generate_formulas <- function(response_var, fixed_predictor, predictors_list,
   return(unique(formulas))
 }
 
-# Example usage
+## RUN ####
+#%%%%%%%%%#
 
 formulas <- generate_formulas(response_var, fixed_predictor, predictors_list, group_var,mod_extension,mod.type)
 model_eval<-data.frame(formulas=unlist(formulas))|> 
@@ -254,6 +261,8 @@ best_model_trait<-model_eval |>
 
 predict_traits<-setNames(data.frame(matrix(nrow = 0,ncol = 9)),
                          nm=c('response','pca_sc','trait','trait_value','predicted_mean','predicted_se','lwr','upr','pred'))
+traits_effect<-setNames(data.frame(matrix(nrow = 0,ncol = 4)),
+                        nm=c('trait','effect',"lwr","upr"))
 for(i in 1:dim(best_model_trait)[1]){
   best_model=best_model_trait$formulas[i]
   
@@ -334,7 +343,16 @@ for(i in 1:dim(best_model_trait)[1]){
   
   predict_traits<-bind_rows(predict_traits,
                             new_data )
-  
+  if(length(predictor)>0){
+    effect_conf<-as.data.frame(confint(mod_maint)) |> 
+      tibble::rownames_to_column(var="trait")
+    vec_eff<-unname(effect_conf[effect_conf$trait==predictor,c(1,4,2,3)])
+    rownames(vec_eff)<-NULL
+    colnames(vec_eff)<-colnames(traits_effect)
+    traits_effect<-rbind(traits_effect,
+                         vec_eff)
+    
+  }
   # new_data |> 
   #   ggplot()+
   #   geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,fill=as.factor(pred)),alpha=0.2)+
@@ -354,6 +372,7 @@ predict_traits |>
                             TRUE~"Medium compet"),
          pred_cat=factor(pred_cat,levels=c("Low compet","Medium compet","High compet")),
          pred_name=factor(pred_name,levels=c("none",predictors_list))) |> 
+  filter(pred_cat%in%c("Low compet","High compet")) |> 
   ggplot()+
   geom_ribbon(aes(x=pca_sc,ymax=upr,ymin=lwr,
                   fill=pred_cat),
@@ -366,5 +385,15 @@ predict_traits |>
        title=paste0(best_model))+
   scale_color_manual(values=c("darkseagreen","darksalmon","darkred"))+
   scale_fill_manual(values=c("darkseagreen","darksalmon","darkred"))+
-  facet_wrap(~pred_name,scales="free_y")+
+  facet_wrap(~pred_name)+
   theme_classic()
+
+traits_effect |> 
+  filter(grepl("sp",data_name)) |> 
+  ggplot()+
+  geom_segment(aes(x=lwr,xend=upr,y=trait,yend=trait))+
+  geom_point(aes(x=effect,y=trait))+
+  theme_classic()+
+  labs(y="",x="Standardized trait effect")+
+  facet_wrap()
+ 

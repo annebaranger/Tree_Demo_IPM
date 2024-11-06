@@ -77,6 +77,39 @@ get_recruitment_traits = function(fit.list.allspecies, FUNDIV_data, comp.ref){
   return(traits_rec)
 }
 
+# ## first
+# i=14
+# sp.i = traits_rec$species[i]
+# vec.rec.i = fit.list.allspecies[[i]]$rec$params_m
+# i=12
+# sp.i = traits_rec$species[i]
+# vec.var.i = as.vector(subset(data_species, species == sp.i)[, names(vec.rec.i)])
+# rec_1 = exp(sum(vec.rec.i*unlist(vec.var.i)))
+# 
+# ## second
+# i=12
+# sp.i = traits_rec$species[i]
+# vec.rec.i = fit.list.allspecies[[i]]$rec$params_m
+# i=14
+# sp.i = traits_rec$species[i]
+# vec.var.i = as.vector(subset(data_species, species == sp.i)[, names(vec.rec.i)])
+# rec_2 = exp(sum(vec.rec.i*unlist(vec.var.i)))
+# 
+# ## third
+# i=12
+# sp.i = traits_rec$species[i]
+# vec.rec.i = fit.list.allspecies[[i]]$rec$params_m
+# vec.var.i = as.vector(subset(data_species, species == sp.i)[, names(vec.rec.i)])
+# rec_3 = exp(sum(vec.rec.i*unlist(vec.var.i)))
+# 
+# 
+# ## fourth
+# i=14
+# sp.i = traits_rec$species[i]
+# vec.rec.i = fit.list.allspecies[[i]]$rec$params_m
+# vec.var.i = as.vector(subset(data_species, species == sp.i)[, names(vec.rec.i)])
+# rec_4 = exp(sum(vec.rec.i*unlist(vec.var.i)))
+
 # save(traits_rec,file="trait_rec.RData")
 load("inv_30.rdata")
 inv_30 |> left_join(traits_rec) |> 

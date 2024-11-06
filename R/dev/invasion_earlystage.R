@@ -92,7 +92,7 @@ quersube<-sim_tot |>
 inv_30<-bind_rows(inv_30,
                   data.frame(species="Quercus_suber",
                              inv_30=quersube$inv_30[[1]]))
-save(inv_30,file="inv_30.RData")
+# save(inv_30,file="inv_30.RData")
 load("inv_30.RData")
 load("sim_tot_inv_30.RData")
 # save(sim_tot,file="sim_tot_inv_30.RData")
@@ -114,9 +114,10 @@ traits<-read.csv("data/traits_complete.csv") |>
   # left_join(inv_18_2 |> mutate(species=gsub("_"," ",species))) |> 
   left_join(inv_30|> mutate(species=gsub("_"," ",species))) |> 
   left_join(mean_demo) |> 
-  left_join(traits_rec|> mutate(species=gsub("_"," ",species)))
+  left_join(traits_rec|> mutate(species=gsub("_"," ",species))) |> 
   # left_join(traits_MASTIF|> mutate(species=gsub("_"," ",species))) |> 
   # left_join(traits_nfi) |>
+  filter(species!="Pinus pinea") |> 
   # select(-c(pca1,pca2,taxa,sgdd,wai,sgddb,waib,wai2,sgdd2,bark.thickness_mm)) |> 
   drop_na() 
 GGally::ggpairs(traits[,c(3:20)])
@@ -142,5 +143,6 @@ factoextra::fviz_pca_biplot(pca_traits,
   geom_text(data = pca_ind, 
             aes(x = PC1, y = PC2, label = species, color= as.factor(taxa)), 
             vjust = -0.5, 
-            hjust = 0.5)    
+            hjust = 0.5)+
+  coord_equal()
 
