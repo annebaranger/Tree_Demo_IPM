@@ -21,11 +21,12 @@ library(targets)
 # Load functions
 # lapply(grep("R$", list.files("R"), value = TRUE), function(x) source(file.path("R", x)))
 source("R/functions_data.R")
+source("R/functions_analysis.R")
 # install if needed and load packages
 packages.in <- c("dplyr", "ggplot2", "matreex", "tidyr", "data.table", "stringr",
                  "factoextra", "modi", "sf", "rnaturalearth", "scales", 
                  "cowplot", "multcomp", "future", "GGally", #"FD",  "piecewiseSEM",
-                 "statmod", "xtable", "car", "grid", "gridExtra") #, "semEff"
+                 "statmod", "xtable", "car","mice", "grid", "gridExtra") #, "semEff"
 for(i in 1:length(packages.in)) if(!(packages.in[i] %in% rownames(installed.packages()))) install.packages(packages.in[i])
 # Targets options
 options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")
@@ -427,6 +428,17 @@ list(
              get_dif_ba(disturbance_ba,
                         species.list.ipm)),
   
+  
+  #'5 Performance final
+  tar_target(performance,
+             get_performance(species.list.ipm,
+                             disturbance_ba,
+                             invasion_ba_2,
+                             ba_dif,
+                             sim_forest_excl,
+                             climate.cat,
+                             trait_complete,
+                             trait_selection=c("HM","recruitment","WD"))),
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare data for simulations -----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -443,10 +455,48 @@ list(
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   # -- Prepare traits data -----
   #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Traits shade
+  tar_target(file.shade,"data/Traits/data_Niinemets&Valladares_2006.csv",format="file"),
+  tar_target(trait_shade,
+             get_shade(file.shade)),
+  # -- Traits Julien (Height/DBH, maxgrowth, WD)
+  tar_target(file.traitsJul, "data/Traits/traits_JB_FunEcol.csv", format = "file"),
+  tar_target(trait_jul, fread(file.traitsJul)),
+  # -- TRY
+  tar_target(file.try,"data/Traits/try/try_query.csv",format="file"),
+  tar_target(trait_try,get_try(file.try)),
   
-  # -- Traits data file
-  tar_target(traits_file, "data/traits.csv", format = "file"),
-  # -- Read traits data
-  tar_target(traits, fread(traits_file)),
+  # -- Wood Density
+  tar_target(file.wd,"data/Traits/GlobalWoodDensityDatabase.csv",format="file"),
+  tar_target(trait_wd,get_WD(file.wd,trait_try)),
+  
+  # -- Max Heigth
+  tar_target(trait_maxH,get_maxH(FUNDIV_data)),
+  
+  # -- Recruitment
+  tar_target(trait_recruitment,
+             get_recruitment_traits(fit.list.allspecies, 
+                                   FUNDIV_data,
+                                   comp.ref="specific")),
+  
+  # -- Trait tot
+  tar_target(trait_raw,
+             get_traits(trait_shade,
+                        trait_jul,
+                        trait_try,
+                        trait_wd,
+                        trait_maxH,
+                        trait_recruitment,
+                        species.list.ipm)),
+  tar_target(trait_complete,
+             complete_trait(trait_raw)),
+  
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  # -- Run models -----
+  #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+  tar_target(models_traits,
+             run_model(performance,
+                       climate.cat,
+                       trait_complete)),
   NULL
 )

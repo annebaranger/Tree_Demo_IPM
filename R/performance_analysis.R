@@ -71,34 +71,34 @@ performance |> left_join(traits |> mutate(species=gsub("_"," ",species))) |>
   group_by(species,shade,inv_sp,ba_equil) |> filter(metric=="inv_50") |> summarise(inv_max=max(metric_val,na.rm=TRUE)) ->tt 
 pca=prcomp(tt[,c("inv_max","inv_sp")],scale=TRUE,center=TRUE)
 factoextra::fviz_pca_var(pca)
-# ### Species exclusion ####
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# species.combination.excl$smallcombi<-NA
-# for(i in 1:dim(species.combination.excl)[1]){
-#   if(species.combination.excl$competexcluded[i]!=""){
-#     s_p=gsub(" ","_",species.combination.excl$species[i])
-#     sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
-#     # sp_combi=sp_combi[sp_combi!=s_p]
-#     sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
-# 
-#     new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
-#     ex<-species.combination.excl %>%
-#       filter(species==species.combination.excl$species[i]&
-#                clim_id==species.combination.excl$clim_id[i]&
-#                species_combination==new_combi)
-#     if(dim(ex)[1]==1){
-#       species.combination.excl$smallcombi[i]="present"
-#     }else{
-#       species.combination.excl$smallcombi[i]="absent"
-#     }
-#   }
-# 
-# }
-# # for checking the proportion of combination represented after species exclusion
-# # species.combination.excl %>%
-# #   filter(competexcluded!="") %>%
-# #   filter(smallcombi=="absent")
-# 
+### Species exclusion ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+species.combination.excl$smallcombi<-NA
+for(i in 1:dim(species.combination.excl)[1]){
+  if(species.combination.excl$competexcluded[i]!=""){
+    s_p=gsub(" ","_",species.combination.excl$species[i])
+    sp_combi=unlist(strsplit(species.combination.excl$species_combination[i], split = "\\."))
+    # sp_combi=sp_combi[sp_combi!=s_p]
+    sp_ex=unlist(strsplit(species.combination.excl$competexcluded[i],"\\."))[-1]
+
+    new_combi=paste(sort(sp_combi[!sp_combi%in%sp_ex]),collapse=".")
+    ex<-species.combination.excl %>%
+      filter(species==species.combination.excl$species[i]&
+               clim_id==species.combination.excl$clim_id[i]&
+               species_combination==new_combi)
+    if(dim(ex)[1]==1){
+      species.combination.excl$smallcombi[i]="present"
+    }else{
+      species.combination.excl$smallcombi[i]="absent"
+    }
+  }
+
+}
+# for checking the proportion of combination represented after species exclusion
+# species.combination.excl %>%
+#   filter(competexcluded!="") %>%
+#   filter(smallcombi=="absent")
+
 # ### Performance metrics ####
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # 
@@ -187,8 +187,8 @@ factoextra::fviz_pca_var(pca)
 #   select(-c("x","y")) %>%
 #   pivot_wider(names_from = name_upd,
 #               values_from = compet_val)
-#   # filter(excluded!="excluded") %>%
-#   # filter(is.na(smallcombi)|smallcombi!="present")
+  # filter(excluded!="excluded") %>%
+  # filter(is.na(smallcombi)|smallcombi!="present")
 #   save(performance,file = "performance_3.RData")
 
 
