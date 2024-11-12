@@ -33,8 +33,8 @@ load("trait_rec.RData")
 #               mutate(species=gsub(" ","_",species))) %>% 
 #   rename(inv_sp=inv_50)
 
-traits<-read.csv("data/traits_complete.csv") %>%
-  select(species,HM,WD) %>%
+traits<-read.csv("data/Traits/traits_complete.csv") %>%
+  dplyr::select(species,HM,WD) %>%
   mutate(species=gsub(" ","_",species)) %>%
   left_join(traits_rec) |> 
   rename(inv_sp=recruitment)

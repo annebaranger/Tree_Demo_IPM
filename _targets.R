@@ -26,7 +26,7 @@ source("R/functions_analysis.R")
 packages.in <- c("dplyr", "ggplot2", "matreex", "tidyr", "data.table", "stringr",
                  "factoextra", "modi", "sf", "rnaturalearth", "scales", 
                  "cowplot", "multcomp", "future", "GGally", #"FD",  "piecewiseSEM",
-                 "statmod", "xtable", "car","mice", "grid", "gridExtra") #, "semEff"
+                 "statmod", "xtable", "car","mice", "grid", "gridExtra","glmmTMB","lme4") #, "semEff"
 for(i in 1:length(packages.in)) if(!(packages.in[i] %in% rownames(installed.packages()))) install.packages(packages.in[i])
 # Targets options
 options(tidyverse.quiet = TRUE, clustermq.scheduler = "multiprocess")

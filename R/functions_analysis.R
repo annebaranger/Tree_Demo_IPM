@@ -99,9 +99,11 @@ get_WD<-function(file.wd,
   
   wd_tot<-data.frame(species=sp_list) %>% 
     left_join(wd_global,by='species') %>%
+    rename(WD_glob=WD) |> 
     left_join(wd_try,by="species") %>% 
-    mutate(WD=case_when(is.na(WD.x)~WD.y,
-                        TRUE~WD.x)) |> 
+    rename(WD_try=WD) |> 
+    mutate(WD=case_when(is.na(WD_glob)~WD_try,
+                        TRUE~WD_glob)) |> 
     dplyr::select(species,WD)
   
   return(wd_tot)
@@ -578,15 +580,21 @@ run_model<-function(performance,
     data_mod[[response_var]]<-data_mod[[response_name]]
     
     formulas <- generate_formulas(response_var, fixed_predictor, predictors_list, group_var,mod_extension,mod.type)
-    model_eval<-data.frame(formulas=unlist(formulas))|> 
-      rowwise() |> 
-      mutate(trait = purrr::map_chr(predictors_list, ~ ifelse(grepl(.x, formulas), .x, NA_character_)) %>% 
-               purrr::discard(is.na) %>% 
-               first()) %>%
-      ungroup() |> 
-      mutate(model=paste0("model_",row_number()),
-             AIC=NA_real_,
-             ncof=NA_real_)
+    model_eval <- data.frame(formulas = unlist(formulas)) |>
+      rowwise() |>
+      mutate(
+        trait = {
+          matched_traits <- purrr::map_chr(predictors_list, ~ ifelse(grepl(.x, formulas), .x, NA_character_)) %>% 
+            purrr::discard(is.na)
+          if (length(matched_traits) == 0) NA_character_ else data.table::first(matched_traits)
+        }
+      ) |>
+      ungroup() |>
+      mutate(
+        model = paste0("model_", row_number()),
+        AIC = NA_real_,
+        ncof = NA_real_
+      )
     for(i in 1:dim(model_eval)[1]){
       print(paste0("model ",i,"/",dim(model_eval)[1]))
       eval(parse(text = paste0("model_i", "=",model_eval$formulas[i])))
@@ -734,6 +742,6 @@ run_model<-function(performance,
   }
   
   return(list(best_models=best_models,
-              traits_effect=trait_effect,
+              traits_effect=traits_effect,
               predict_traits=predict_traits))
 }
