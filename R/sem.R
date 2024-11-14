@@ -54,12 +54,12 @@ performance_mod<-performance |>
   
   # filter(species%in%c("Abies alba","Carpinus betulus","Fagus sylvatica","Quercus ilex","Picea abies","Quercus robur"))
 
-## plots 
+## plots ####
+#%%%%%%%%%%%%
 performance_mod |>
-  filter(metric=="ba_dif") |>
   # filter(gsub(" ","_",species)!=species_combination) |> 
   # filter(excluded=="notExcluded") |> 
-  ggplot(aes(pca1,ba_partner,color=log(prop_all)))+
+  ggplot(aes(dist_pca1,ba_partner,color=log(prop_all)))+
   geom_point()+
   geom_smooth(se=FALSE)+
   facet_wrap(~species)
@@ -76,48 +76,31 @@ performance_mod |>
   ggplot(aes(clim_id,prop_all))+
   geom_point()+
   facet_wrap(~species)
-## model
-mod_compet<-lmer(ba_partner ~ (1|species)+(1|species:species_combination)+ pca1 + I(pca1^2), 
-                 weights = prop_all,
-                 data=subset(performance_mod,metric=="resilience"))
-summary(mod_compet)
-confint(mod_compet)
-
-sim_res <- simulateResiduals(mod_compet)
-plot(sim_res)
 
 
-mod_data<-performance_mod |> 
-  filter(metric=="ba_dif") |> 
-  dplyr::select(species,species_combination,metric_val,ba_partner,pca1,prop_all) |> 
-  mutate(pca1_2=pca1^2)
-mod_data <- na.omit(mod_data)
-# submodel for climate and competition
-mod_data |> ggplot(aes(ba_partner,pca1,color=species_combination))+
-  geom_point()+
-  geom_smooth(method="lm")+
-  theme(legend.position = "none")+facet_wrap(~species,scales="free")
-mod_compet<-lmer(nid~(1|species)+(1|species:species_combination)+
-                   pca1,data=mod_data)
-confint(mod_compet)
+## model ####
+#%%%%%%%%%%%%
+# mod_compet<-lmer(ba_partner ~ (1|species)+(1|species:species_combination)+ pca1 + I(pca1^2), 
+#                  weights = prop_all,
+#                  data=subset(performance_mod,metric=="resilience"))
+# summary(mod_compet)
+# confint(mod_compet)
+# 
+# sim_res <- simulateResiduals(mod_compet)
+# plot(sim_res)
+# 
 
-
-mod_resi<-lmer(metric_val ~ (1|species)+(1|species:species_combination)+ pca1 + pca12 +
-                 pca1*ba_partner + pca1*nih , data=mod_data)
-confint(mod_resi)
-summary(mod_resi)
-# -- Make model
 mod_sem = list(
-  lmer(ba_partner ~ (1|species) + (1|species:species_combination) + pca1 + dist_pca1, 
+  lmer(ba_partner ~ (1|species) + pca1 + dist_pca1, 
        weights = prop_all,
        data=performance_mod),
   # lmer(inv_50 ~ (1|species) + (1|species:species_combination)+ pca1 + dist_pca1 + ba_partner + ba_target + BA_100,
   #      data=performance_mod),
-  lmer(inv_50 ~ (1|species) + (1|species:species_combination)+ pca1 + dist_pca1 + ba_partner + ba_target + resilience,
+  lmer(inv_50 ~ (1|species)+ pca1 + dist_pca1 + ba_partner + ba_target ,
        data=performance_mod),
-  lmer(resilience ~ (1|species) + (1|species:species_combination) + pca1 + dist_pca1 + ba_partner + ba_target ,
+  lmer(resilience ~ (1|species) + pca1 + dist_pca1 + ba_partner + ba_target ,
        data=performance_mod),
-  lmer(ba_target ~ (1|species) + (1|species:species_combination) + pca1 + dist_pca1 + ba_partner,
+  lmer(ba_target ~ (1|species) + pca1 + dist_pca1 + ba_partner,
        data=performance_mod))
 
 # Extract the effects
