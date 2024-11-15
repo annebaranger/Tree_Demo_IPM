@@ -443,6 +443,95 @@ make_species_combinations <- function(FUNDIV_data,
 }
 
 
+
+
+#' Function to identify main species combinations per species and climate category
+#' @description
+#' other method to select only most present species in each species climate category
+#' 
+#' @param FUNDIV_data whole dataset
+#' @param FUNDIV_plotcat dataset with plots per species, and corresponding climate category
+#' @param species focal species 
+#' @param species.list.ipm list of species
+#' @param nsp_per_richness maximum of species richness per combination
+#' @param prop_threshold threshold of cumulative proportion
+make_species_combinations_2 <- function(FUNDIV_data,
+                                      FUNDIV_plotcat,
+                                      condi.init,
+                                      sp_id,
+                                      species.list.disturbance,
+                                      species.list.ipm, 
+                                      nsp_per_richness=10,
+                                      prop_threshold=0.8){
+  s_p=species.list.disturbance[sp_id]
+  sp=gsub("_"," ",s_p)
+  print(sp)
+  
+  sp_clim<-condi.init %>% 
+    filter(species==sp)
+  clim_breaks=unique(sort(c(sp_clim$clim_low,sp_clim$clim_up)))
+  
+  species_cat<- FUNDIV_data %>% 
+    # compute basal area ratio of species per plot
+    filter(dbh1>0) |>
+    group_by(plotcode) |> 
+    mutate(BAsum=sum(ba_ha1)) |> 
+    group_by(plotcode,species) |> 
+    mutate(BAsumsp=sum(ba_ha1), 
+           sp_ratio=BAsumsp/BAsum) |> 
+    ungroup() |> 
+    # categorize plots in species category
+    mutate(clim_cat = cut(pca1,  # Create climate categories based on PCA1
+                          breaks = clim_breaks,  # Use quantiles for equal-sized categories
+                          include.lowest = TRUE),
+           clim_id=as.integer(as.factor(clim_cat))) %>% 
+    # left_join(sp_clim,by=c("clim_id")) %>% 
+    # remove plot out of category
+    filter(!is.na(clim_id)) %>% 
+    # filter out competitors that are not present enough
+    filter(!(sp_ratio<0.1)) |> 
+    # get proportion of plots where each species is present in each clim cat
+    group_by(clim_id) %>% 
+    mutate(n_plot_cat=sum(ba_ha1)) %>% 
+    ungroup() %>% 
+    group_by(clim_id,species) %>% 
+    summarise(n_plot_cat_sp=sum(ba_ha1)/n_plot_cat) %>% unique() %>% 
+    filter(species %in% gsub("_"," ",species.list.ipm)) %>% 
+    arrange(clim_id,desc(n_plot_cat_sp)) %>% 
+    group_by(clim_id) %>% 
+    slice(1:10) 
+  
+  double<-species_cat %>% 
+    rowwise() %>% 
+    mutate(species_combination=paste(sort(c(sp,species)),collapse="."))%>% 
+    dplyr::select(clim_id,species_combination)
+  
+  
+  triple<-species_cat %>% 
+    slice(1:3) %>% 
+    summarise(species_list = list(species))%>%      # Collect species into a list per clim_id
+    rowwise() %>%
+    mutate(combinations = list(
+      as.data.frame(t(combn(species_list, 2)))  # Generate all combinations of 2 species
+    )) %>%
+    unnest(combinations) %>%                         # Expand the combinations into rows
+    rowwise() %>% 
+    mutate(species_combination=paste(sort(c(sp,V1,V2)),collapse=".")) %>% 
+    dplyr::select(clim_id,species_combination)
+  
+  uno<-sp_clim %>% dplyr::select(species,clim_id) %>% rename(species_combination=species)
+
+  
+  out<-sp_clim %>% 
+    left_join(rbind(uno,double,triple),by="clim_id") %>% 
+    rowwise() %>% 
+    mutate(n_species=length(strsplit(species_combination,"\\.")[[1]]),
+           species_combination=gsub(" ","_",species_combination))
+
+  return(out)
+}
+
+
 #' Function that computes climate boundaries for matrix mu fits
 #' @param species.combination list of species combinations
 make_clim_boundaries <- function(species.combination){

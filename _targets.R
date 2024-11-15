@@ -129,6 +129,17 @@ list(
                                        prop_threshold=0.8),
              pattern=map(sp_id),iteration = "vector"),
   
+  tar_target(species.combination_2,
+             make_species_combinations_2(FUNDIV_data=FUNDIV_data,
+                                       FUNDIV_plotcat=climate.cat$FUNDIV_plotcat,
+                                       condi.init=climate.cat$species.cat,
+                                       sp_id=sp_id,
+                                       species.list.disturbance=species.list.disturbance,
+                                       species.list.ipm=species.list.ipm, 
+                                       nsp_per_richness=10,
+                                       prop_threshold=0.8),
+             pattern=map(sp_id),iteration = "vector"),
+  
   tar_target(clim_bound,
              make_clim_boundaries(species_list.select)),
   # create a list of all species to be computed
