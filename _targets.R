@@ -223,6 +223,19 @@ list(
              iteration="vector",
              format="file"),
   
+  tar_target(sim_invasion_2,
+             make_simulations_invasion_3(sim_forest_list$list.forests,
+                                         species_list.select,
+                                         species_object_mu,
+                                         harv_rules.ref,
+                                         sim_equil,
+                                         BA_target=1,
+                                         threshold_pop=200,
+                                         id_forest=sim_invasion.id),
+             pattern=map(sim_invasion.id),
+             iteration="vector",
+             format="file"),
+  
   # simulation for disturbance
   tar_target(sim_dist.id,
              sim_forest_list$id.simul_forest),
@@ -376,6 +389,11 @@ list(
                                id.simul_forest=sim_forest_list$id.simul_forest,
                                sim_invasion=sim_invasion,
                                fit.list.allspecies=fit.list.allspecies)),
+  tar_target(invasion_metric_3,
+             get_invasion_rate_3(species.combination=sim_forest_excl$list.forests,
+                                 id.simul_forest=sim_forest_list$id.simul_forest,
+                                 sim_invasion=sim_invasion,
+                                 fit.list.allspecies=fit.list.allspecies)),
   #' 2. Extract resilience metric
   tar_target(
     forest_iteration,
