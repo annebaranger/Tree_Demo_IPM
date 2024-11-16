@@ -497,6 +497,7 @@ make_species_combinations_2 <- function(FUNDIV_data,
     group_by(clim_id,species) %>% 
     summarise(n_plot_cat_sp=sum(ba_ha1)/n_plot_cat) %>% unique() %>% 
     filter(species %in% gsub("_"," ",species.list.ipm)) %>% 
+    filter(species!=sp) %>% 
     arrange(clim_id,desc(n_plot_cat_sp)) %>% 
     group_by(clim_id) %>% 
     slice(1:10) 

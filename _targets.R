@@ -144,7 +144,7 @@ list(
              make_clim_boundaries(species_list.select)),
   # create a list of all species to be computed
   tar_target(species_list,
-             make_species_list(species.combination)),
+             make_species_list(species.combination_2)),
   
   # subselect species and climate to fit
   tar_target(species.select,
@@ -161,7 +161,7 @@ list(
   tar_target(species_list.mu.select,
              levels(species_list.select$species_combination)),
   tar_target(species.combination.select,
-             species.combination |> 
+             species.combination_2 |> 
                filter(species%in%species.select) |> 
                filter(ID.spclim%in% clim.select)),
   
